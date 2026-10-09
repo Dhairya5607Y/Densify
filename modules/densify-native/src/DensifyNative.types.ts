@@ -1,0 +1,32 @@
+export type AdbState = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type AdbEvent = { state: AdbState; message?: string | null };
+export type EngineEvent = { running: boolean; appliedDpi?: number | null; activePkg?: string | null; errTitle?: string | null; errHint?: string | null };
+export type InstalledApp = { pkg: string; name: string; isGame: boolean };
+export type Capabilities = { hz: number; perf: boolean; guard: boolean; tile: boolean };
+export type SettingsKind = 'usage' | 'developer' | 'battery' | 'notifications' | 'settings';
+export type NativeEvents = { onAdb: (e: AdbEvent) => void; onEngine: (e: EngineEvent) => void };
+export interface NativeApi {
+  storageGet(key: string): string | null;
+  storageSet(key: string, value: string): boolean;
+  setFlags(monitoring: boolean, restoreOnBoot: boolean): boolean;
+  hasUsageAccess(): boolean;
+  hasNotifications(): boolean;
+  isBatteryUnrestricted(): boolean;
+  hasSecureSettings(): boolean;
+  adbConnected(): boolean;
+  isMonitoring(): boolean;
+  battery(): { level: number; charging: boolean; tempC: number };
+  openSettings(kind: SettingsKind): boolean;
+  requestAddTile(): boolean;
+  getInstalledApps(): Promise<InstalledApp[]>;
+  getAppIcon(pkg: string): Promise<string>;
+  startPairing(): boolean;
+  connect(): Promise<boolean>;
+  grantSelf(): Promise<boolean>;
+  capabilities(): Promise<Capabilities>;
+  readDensity(): Promise<{ physical: number; effective: number }>;
+  setDensity(dpi: number): Promise<number>;
+  restoreDefault(): Promise<number>;
+  startMonitoring(): boolean;
+  stopMonitoring(): boolean;
+}

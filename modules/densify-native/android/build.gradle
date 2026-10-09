@@ -1,0 +1,25 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.densifynative'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.densifynative"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // On-device ADB over Wireless Debugging (needs https://www.jitpack.io in the app's repositories)
+  implementation "com.github.MuntashirAkon:libadb-android:3.1.0"
+  implementation "com.github.MuntashirAkon:sun-security-android:1.1"
+  implementation "org.conscrypt:conscrypt-android:2.5.3"
+}
