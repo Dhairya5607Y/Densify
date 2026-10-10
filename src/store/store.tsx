@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../native/api';
+import { bootHooks } from '../logic/axplugin';
 import { DEFAULT_STATE, NO_STRETCH } from './defaults';
 import type { AppState, Bundle, Profile } from './types';
 
@@ -18,7 +19,7 @@ function toEngine(s: AppState) {
     quick: s.quick,
     scripts: [
       ...s.scripts.map((x) => ({ name: x.name, code: x.code, trigger: x.trigger, pkg: x.pkg, on: x.on })),
-      ...s.plugins.filter((p) => p.on).flatMap((p) => p.hooks.map((h) => ({ name: p.name, code: h.code, trigger: h.trigger, pkg: h.pkg ?? '', on: true }))),
+      ...s.plugins.filter((p) => p.on).flatMap((p) => [...bootHooks(p), ...p.hooks].map((h) => ({ name: p.name, code: h.code, trigger: h.trigger, pkg: h.pkg ?? '', on: true }))),
     ],
     profiles: s.profiles.map((p) => ({ pkg: p.pkg, name: p.name, dpi: p.dpi, auto: p.auto, restore: p.restore, bundle: resolveBundle(s, p), stretch: p.stretch ?? NO_STRETCH })),
   };

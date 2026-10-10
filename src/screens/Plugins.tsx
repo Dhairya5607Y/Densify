@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { TextInput, View } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import { api } from '../native/api';
+import { installZip, removeZipPlugin, runAction } from '../logic/axplugin';
 import { useStore } from '../store/store';
 import type { Plugin } from '../store/types';
 import { useTheme } from '../theme/ThemeContext';
@@ -54,12 +57,36 @@ export function Plugins() {
     } catch (e) { toast({ title: "Couldn't install", sub: (e as Error).message, err: true }); }
     setBusy(false);
   };
+  const [step, setStep] = useState('');
+  const [log, setLog] = useState('');
+  const pickZip = async () => {
+    if (!(await ensure('shell'))) return;
+    try {
+      const r = await DocumentPicker.getDocumentAsync({ type: ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'], copyToCacheDirectory: true });
+      if (r.canceled) return;
+      setBusy(true); setLog(''); setStep('Reading zip');
+      const bytes = new Uint8Array(await new File(r.assets[0].uri).arrayBuffer());
+      const { plugin, log: out } = await installZip(bytes, setStep);
+      const upd = state.plugins.some((x) => x.id === plugin.id);
+      update((s) => ({ ...s, plugins: upd ? s.plugins.map((x) => (x.id === plugin.id ? { ...plugin, on: x.on } : x)) : [...s.plugins, plugin] }));
+      setLog(out); toast({ title: upd ? `${plugin.name} updated` : `${plugin.name} installed` });
+    } catch (e) { setLog((e as Error).message); toast({ title: "Couldn't install", sub: (e as Error).message.slice(0, 120), err: true }); }
+    setBusy(false); setStep('');
+  };
+  const runZipAction = async (p: Plugin) => {
+    if (!(await ensure('shell'))) return;
+    try { setLog(await runAction(p)); toast({ title: `${p.name}: action finished` }); }
+    catch (e) { toast({ title: 'Action failed', sub: (e as Error).message, err: true }); }
+  };
   const run = async (p: Plugin, a: Plugin['actions'][number]) => {
     if (!(await ensure('shell'))) return;
     try { const out = await api.shell(a.code); toast({ title: `${a.name}: done`, sub: out.trim().slice(0, 80) || undefined }); }
     catch (e) { toast({ title: `${a.name} failed`, sub: (e as Error).message, err: true }); }
   };
-  const remove = (p: Plugin) => { update((s) => ({ ...s, plugins: s.plugins.filter((x) => x.id !== p.id) })); toast({ title: `${p.name} removed`, action: { label: 'Undo', run: () => update((s) => ({ ...s, plugins: [...s.plugins, p] })) } }); };
+  const remove = async (p: Plugin) => {
+    if (p.dir) { try { await removeZipPlugin(p); } catch (e) { toast({ title: "Couldn't remove files", sub: (e as Error).message, err: true }); return; } update((s) => ({ ...s, plugins: s.plugins.filter((x) => x.id !== p.id) })); toast({ title: `${p.name} removed` }); return; }
+    update((s) => ({ ...s, plugins: s.plugins.filter((x) => x.id !== p.id) })); toast({ title: `${p.name} removed`, action: { label: 'Undo', run: () => update((s) => ({ ...s, plugins: [...s.plugins, p] })) } });
+  };
 
   if (adding) {
     return (
@@ -79,17 +106,19 @@ export function Plugins() {
 
   return (
     <Screen>
-      <Header title="Plugins" sub="Add-ons with actions, hooks and a WebUI" onBack={nav.back} right={<Btn v="pri" label="Install" onPress={() => setAdding(true)} />} />
+      <Header title="Plugins" sub="Add-ons with actions, hooks and a WebUI" onBack={nav.back} right={<View style={{ flexDirection: 'row', gap: 6 }}><Btn v="tonal" label="JSON" onPress={() => setAdding(true)} /><Btn v="pri" label={busy ? step || '…' : 'Zip'} disabled={busy} onPress={pickZip} /></View>} />
+      {log ? <Surface pad={12} style={{ marginBottom: 14 }}><T v="sub" c={t.c.tx2} style={{ fontFamily: 'monospace', fontSize: 12 }}>{log}</T></Surface> : null}
       {state.plugins.length === 0 ? (
-        <Surface pad={18}><T v="sub">No plugins installed. Tap Install, then Example to see the format.</T></Surface>
+        <Surface pad={18}><T v="sub">No plugins installed. Tap Zip to install an AxManager or KernelSU-style module (module.prop, customize.sh, service.sh, action.sh, webroot). JSON lets you write a small plugin by hand.</T></Surface>
       ) : state.plugins.map((p) => (
         <View key={p.id} style={{ marginBottom: 14 }}>
           <Group>
             <Row leadIcon="extension" title={p.name} sub={`v${p.version}${p.author ? ` · ${p.author}` : ''}${p.desc ? `\n${p.desc}` : ''}`} minH={76}
               right={<AppSwitch on={p.on} onChange={(v) => update((s) => ({ ...s, plugins: s.plugins.map((x) => (x.id === p.id ? { ...x, on: v } : x)) }))} />} />
             {p.actions.map((a) => <Row key={a.id} leadIcon="play-arrow" title={a.name} sub="Run now" disabled={!p.on} onPress={() => p.on && run(p, a)} />)}
-            {p.webui ? <Row leadIcon="web" title="Open WebUI" sub="The plugin's own page" disabled={!p.on} onPress={() => p.on && nav.push({ name: 'webui', id: p.id })} right={<Icon name="chevron-right" />} /> : null}
-            <Row leadIcon="delete" title="Remove" sub={`${p.hooks.length} hook${p.hooks.length === 1 ? '' : 's'}`} onPress={() => remove(p)} />
+            {p.action ? <Row leadIcon="play-arrow" title="Action" sub="Run action.sh" disabled={!p.on} onPress={() => p.on && runZipAction(p)} /> : null}
+            {p.webui || p.webroot ? <Row leadIcon="web" title="Open WebUI" sub="The plugin's own page" disabled={!p.on} onPress={() => p.on && nav.push({ name: 'webui', id: p.id })} right={<Icon name="chevron-right" />} /> : null}
+            <Row leadIcon="delete" title="Remove" sub={p.dir ? p.dir : `${p.hooks.length} hook${p.hooks.length === 1 ? '' : 's'}`} onPress={() => remove(p)} />
           </Group>
         </View>
       ))}

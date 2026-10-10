@@ -27,7 +27,7 @@ Per-game display density automation with on-device Wireless Debugging. No root, 
 Touch guard, break reminder, charger-aware presets, automation intents.
 
 ## New in 1.1
-Floating DPI panel over games, per-game stretch screen, automation scripts (game start / exit / boot), terminal, activity log, backup and restore, root mode, Wi-Fi auto-reconnect, Graphite and Manga themes (Glass removed), plugins (actions, hooks, KernelSU-style WebUI), developer tweaks, power menu, settings editor, external broadcast API, crash screen.
+Floating DPI panel over games, per-game stretch screen, automation scripts (game start / exit / boot), terminal, activity log, backup and restore, root mode, Wi-Fi auto-reconnect, Graphite and Manga themes (Glass removed), plugins (AxManager/KernelSU-style zip modules with module.prop, customize.sh, boot scripts, action.sh and webroot WebUI; or small JSON plugins), developer tweaks, power menu, settings editor, external broadcast API, crash screen.
 
 ## Unverified
 The Kotlin module has not been compiled yet. The likeliest first-build errors are `libadb-android` API names (`connectTls`, `pair`, `openStream`) and the `sun.security.x509` imports. Send the EAS build log and they get fixed.

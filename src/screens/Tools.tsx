@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Share, TextInput, View } from 'react-native';
 import { api } from '../native/api';
+import { shq } from '../logic/axplugin';
 import { useStore } from '../store/store';
 import { DEFAULT_STATE } from '../store/defaults';
 import { useTheme } from '../theme/ThemeContext';
@@ -25,6 +26,7 @@ export function Tools() {
   const [cmd, setCmd] = useState('');
   const [out, setOut] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cwd, setCwd] = useState('/data/local/tmp');
   const [logs, setLogs] = useState<string[]>([]);
   const [restoreText, setRestoreText] = useState('');
   useEffect(() => { const read = () => setLogs(api.logs().slice(-60).reverse()); read(); const id = setInterval(read, 2000); return () => clearInterval(id); }, []);
@@ -34,7 +36,11 @@ export function Tools() {
     if (!c || busy) return;
     if (!(await ensure('shell'))) return;
     setBusy(true);
-    try { setOut((await api.shell(c)) || '(no output)'); } catch (e) { setOut(`Error: ${(e as Error).message}`); }
+    try {
+      const raw = await api.shell(`cd ${shq(cwd)} 2>/dev/null; ${c}\necho __DENSIFY_PWD__$(pwd)`);
+      const i = raw.lastIndexOf('__DENSIFY_PWD__');
+      if (i >= 0) { setCwd(raw.slice(i + 15).trim() || cwd); setOut(raw.slice(0, i).trimEnd() || '(no output)'); } else setOut(raw || '(no output)');
+    } catch (e) { setOut(`Error: ${(e as Error).message}`); }
     setBusy(false);
   };
   const exportAll = () => Share.share({ message: JSON.stringify({ app: 'densify', v: 1, profiles: state.profiles, presets: state.presets, scripts: state.scripts, quick: state.quick }) }).catch(() => {});
@@ -52,7 +58,7 @@ export function Tools() {
     <Screen>
       <Header title="Tools" sub="Terminal, logs and backup" onBack={nav.back} />
 
-      <Section title="Terminal" />
+      <Section title={`Terminal · ${cwd}`} />
       <Surface pad={14}>
         <TextInput value={cmd} onChangeText={setCmd} onSubmitEditing={run} placeholder="wm size" placeholderTextColor={t.c.mu} autoCapitalize="none" autoCorrect={false} style={[box, { height: 46 }]} />
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
