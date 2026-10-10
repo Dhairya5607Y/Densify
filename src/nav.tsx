@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { BackHandler } from 'react-native';
 import type { Tab } from './ui/TabBar';
 
-export type Route = { name: 'profile'; pkg: string; label: string } | { name: 'setup' } | { name: 'presets' } | { name: 'tools' } | { name: 'scripts' } | { name: 'plugins' } | { name: 'webui'; id: string } | { name: 'developer' } | { name: 'settingsEditor' };
+export type Route = { name: 'profile'; pkg: string; label: string } | { name: 'setup' } | { name: 'presets' } | { name: 'tools' } | { name: 'scripts' } | { name: 'plugins' } | { name: 'webui'; id: string } | { name: 'developer' } | { name: 'settingsEditor' } | { name: 'apps' };
 type Nav = { tab: Tab; setTab: (t: Tab) => void; route: Route | null; push: (r: Route) => void; back: () => void };
 const C = createContext<Nav>(null as unknown as Nav);
 export const useNav = () => useContext(C);

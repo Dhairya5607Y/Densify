@@ -60,6 +60,7 @@ class DensifyNativeModule : Module() {
     }
     Function("isBatteryUnrestricted") { ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName) }
     Function("hasSecureSettings") { ctx.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED }
+    Function("nativeLibDir") { ctx.applicationInfo.nativeLibraryDir }
     Function("hasOverlay") { Settings.canDrawOverlays(ctx) }
     Function("adbConnected") { Hub.adb.isConnected }
     Function("isMonitoring") { Hub.engine.state.value.running }

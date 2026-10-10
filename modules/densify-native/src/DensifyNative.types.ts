@@ -14,6 +14,7 @@ export interface NativeApi {
   isBatteryUnrestricted(): boolean;
   hasSecureSettings(): boolean;
   hasOverlay(): boolean;
+  nativeLibDir(): string;
   adbConnected(): boolean;
   isMonitoring(): boolean;
   battery(): { level: number; charging: boolean; tempC: number };

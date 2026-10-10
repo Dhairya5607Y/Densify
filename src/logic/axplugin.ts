@@ -5,6 +5,15 @@ import type { Plugin } from '../store/types';
 /** Plugins are stored in a folder the shell user can read and write, like AxManager does. */
 export const BASE = '/data/local/tmp/densify';
 export const dirOf = (id: string) => `${BASE}/plugins/${id}`;
+/** Copies the bundled BusyBox (and resetprop) to a place scripts can run it from. */
+export async function ensureBusybox() {
+  const lib = api.nativeLibDir();
+  if (!lib) throw new Error('Not available here.');
+  await api.shell(`mkdir -p ${shq(BASE + '/bin')}; for f in busybox resetprop; do if [ -f ${shq(lib)}/lib$f.so ]; then cmp -s ${shq(lib)}/lib$f.so ${shq(BASE)}/bin/$f 2>/dev/null || cp ${shq(lib)}/lib$f.so ${shq(BASE)}/bin/$f; chmod 755 ${shq(BASE)}/bin/$f; fi; done`);
+}
+/** Runs a script the way AxManager does: BusyBox ash in standalone mode. */
+export const bbRun = (script: string) => `ASH_STANDALONE=1 ${shq(BASE + '/bin/busybox')} sh ${shq(script)}`;
+
 const BOOT_FILES = ['post-fs-data.sh', 'service.sh', 'boot-completed.sh'];
 const ID_RE = /^[a-zA-Z][a-zA-Z0-9._-]+$/;
 
@@ -74,6 +83,8 @@ export async function installZip(zip: Uint8Array, onStep?: (s: string) => void):
   const id = prop.id;
   const mod = dirOf(id);
   const tmp = `${BASE}/tmp/${id}`;
+  onStep?.('Preparing BusyBox');
+  await ensureBusybox();
   onStep?.('Copying files');
   await api.shell(`rm -rf ${shq(tmp)}; mkdir -p ${shq(tmp + '/ext')}`);
   await pushFile(`${tmp}/module.zip`, zip);
@@ -82,7 +93,7 @@ export async function installZip(zip: Uint8Array, onStep?: (s: string) => void):
   const skip = /^\s*SKIPUNZIP=1/m.test(custom);
   onStep?.('Running installer');
   await pushFile(`${tmp}/install.sh`, new TextEncoder().encode(INSTALLER(mod, tmp, skip)));
-  const log = await api.shell(`sh ${shq(tmp + '/install.sh')} 2>&1`);
+  const log = await api.shell(`PATH=${shq(BASE + '/bin')}:$PATH ${bbRun(tmp + '/install.sh')} 2>&1`);
   if (/^! /m.test(log) || !/- Done/.test(log)) throw new Error(log.trim().split('\n').slice(-3).join('\n') || 'The installer did not finish.');
 
   const plugin: Plugin = {
@@ -96,16 +107,16 @@ export async function installZip(zip: Uint8Array, onStep?: (s: string) => void):
 
 export async function removeZipPlugin(p: Plugin) {
   if (!p.dir) return;
-  if (p.hasUninstall) await api.shell(`sh ${shq(p.dir + '/uninstall.sh')} 2>&1`).catch(() => '');
+  if (p.hasUninstall) await api.shell(`${bbRun(p.dir + '/uninstall.sh')} 2>&1`).catch(() => '');
   await api.shell(`rm -rf ${shq(p.dir)}`);
 }
 
-export const runAction = (p: Plugin) => api.shell(`cd ${shq(p.dir!)} && AXERON=true PATH=${shq(p.dir + '/system/bin')}:$PATH sh ${shq(p.dir + '/action.sh')} 2>&1`);
+export const runAction = (p: Plugin) => api.shell(`cd ${shq(p.dir!)} && AXERON=true PATH=${shq(p.dir + '/system/bin')}:${shq(BASE + '/bin')}:$PATH ${bbRun(p.dir + '/action.sh')} 2>&1`);
 
 /** Boot hooks for a zip plugin, in the form the engine runs them. */
 export const bootHooks = (p: Plugin) => (p.boots ?? []).map((f) => ({
   trigger: 'boot' as const, pkg: undefined as string | undefined,
-  code: `AXERON=true PATH=${shq(p.dir + '/system/bin')}:$PATH sh ${shq(p.dir + '/' + f)}`,
+  code: `AXERON=true PATH=${shq(p.dir + '/system/bin')}:${shq(BASE + '/bin')}:$PATH ${bbRun(p.dir + '/' + f)}`,
 }));
 
 /** Reads webroot/index.html and inlines local scripts and styles, since the page is shown from memory. */

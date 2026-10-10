@@ -59,6 +59,11 @@ export function Developer() {
       </Group>
       <Section title="Editors" />
       <Group><Row leadIcon="edit-note" title="Settings editor" sub="System, secure and global settings" onPress={() => nav.push({ name: 'settingsEditor' })} right={<Icon name="chevron-right" />} /></Group>
+      <Section title="Apps" />
+      <Group><Row leadIcon="apps" title="App access" sub="Allow or deny apps that bind to Densify's service" onPress={() => nav.push({ name: 'apps' })} right={<Icon name="chevron-right" />} /></Group>
+      <T v="sub" style={{ margin: 10, fontFamily: 'monospace', fontSize: 12 }}>
+        Client: bindService(Intent("com.densify.app.api.BIND").setPackage("com.densify.app")). Then binder.transact(1, data, reply, 0) with data.writeInterfaceToken("com.densify.app.IDensifyApi") and data.writeString(cmd). Codes: 1 exec, 2 setDensity, 3 restore, 4 ping.
+      </T>
       <Section title="External API" />
       <Group>
         <Row leadIcon="api" title="Allow other apps" sub="Tasker and similar apps can set DPI with a token" right={<AppSwitch on={state.externalApi} onChange={toggleApi} />} />

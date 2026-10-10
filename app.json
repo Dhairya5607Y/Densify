@@ -31,7 +31,8 @@
             "minSdkVersion": 30,
             "extraMavenRepos": [
               "https://www.jitpack.io"
-            ]
+            ],
+            "useLegacyPackaging": true
           }
         }
       ]

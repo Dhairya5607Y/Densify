@@ -16,6 +16,7 @@ export const api = {
   hasUsageAccess: () => (Native ? Native.hasUsageAccess() : false),
   hasNotifications: () => (Native ? Native.hasNotifications() : false),
   isBatteryUnrestricted: () => (Native ? Native.isBatteryUnrestricted() : false),
+  nativeLibDir: () => (Native ? Native.nativeLibDir() : ''),
   hasOverlay: () => (Native ? Native.hasOverlay() : false),
   logs: () => (Native ? Native.logs() : []),
   clearLogs: () => (Native ? Native.clearLogs() : false),

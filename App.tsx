@@ -22,6 +22,7 @@ import { Scripts } from './src/screens/Scripts';
 import { Tools } from './src/screens/Tools';
 import { Plugins } from './src/screens/Plugins';
 import { PluginUI } from './src/screens/PluginUI';
+import { Apps } from './src/screens/Apps';
 import { Developer } from './src/screens/Developer';
 import { SettingsEditor } from './src/screens/SettingsEditor';
 import { CrashScreen, installCrashHandler } from './src/screens/Crash';
@@ -57,6 +58,7 @@ function Shell() {
             {r.name === 'webui' && <PluginUI id={r.id} />}
             {r.name === 'developer' && <Developer />}
             {r.name === 'settingsEditor' && <SettingsEditor />}
+            {r.name === 'apps' && <Apps />}
           </View>
         </Slide>
       )}
