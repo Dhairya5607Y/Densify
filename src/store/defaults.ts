@@ -16,6 +16,9 @@ export const DEFAULT_STATE: AppState = {
   autoReconnect: true,
   mode: 'wireless',
   scripts: [],
+  plugins: [],
+  externalApi: false,
+  apiToken: '',
   quick: [400, 480, 560, 640],
   presets: [
     { id: 'esport', name: 'Esport', bundle: { hz: true, perf: true, dnd: true, rot: true, guard: true, bright: false, awake: true } },

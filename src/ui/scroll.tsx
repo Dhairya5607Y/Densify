@@ -10,7 +10,7 @@ export function ScrollDirProvider({ children }: { children: React.ReactNode }) {
 }
 
 /** Scrolling down turns the tab bar solid; scrolling up (or reaching the top) makes it translucent. */
-export function Screen({ children, tab, footer }: { children: React.ReactNode; tab?: boolean; footer?: React.ReactNode }) {
+export function Screen({ children, tab, footer, scroll = true }: { children: React.ReactNode; tab?: boolean; footer?: React.ReactNode; scroll?: boolean }) {
   const insets = useSafeAreaInsets();
   const { set } = useScrollDir();
   const last = useRef(0);
@@ -20,6 +20,7 @@ export function Screen({ children, tab, footer }: { children: React.ReactNode; t
     if (y <= 0) { set('up'); last.current = 0; return; }
     if (Math.abs(d) > 6) { set(d > 0 ? 'down' : 'up'); last.current = y; }
   };
+  if (!scroll) return <View style={{ flex: 1, paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: insets.bottom + 12 }}>{children}</View>;
   return (
     <View style={{ flex: 1 }}>
       <ScrollView onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}

@@ -13,6 +13,7 @@ export const NEEDS: Record<string, Req[]> = {
   floating: ['overlay', 'adb'],
   stretch: ['adb'],
   shell: ['adb'],
+  developer: ['adb'],
 };
 
 export const REQ: Record<Req, { icon: IconName; title: string; body: string; action: string }> = {

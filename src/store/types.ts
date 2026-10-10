@@ -3,6 +3,10 @@ export type BundleKey = keyof Bundle;
 export type Preset = { id: string; name: string; bundle: Bundle };
 export type Stretch = { on: boolean; mode: 'ratio' | 'custom'; ratio: string; w: number; h: number };
 export type Script = { id: string; name: string; code: string; trigger: 'start' | 'exit' | 'boot'; pkg: string; on: boolean };
+export type PluginAction = { id: string; name: string; code: string };
+export type PluginHook = { trigger: 'start' | 'exit' | 'boot'; code: string; pkg?: string };
+/** An installable add-on: shell actions, event hooks and an optional WebUI page. */
+export type Plugin = { id: string; name: string; version: string; author: string; desc: string; on: boolean; actions: PluginAction[]; hooks: PluginHook[]; webui?: string };
 export type Profile = { pkg: string; name: string; dpi: number; auto: boolean; restore: boolean; presetId: string; bundle: Bundle; stretch?: Stretch };
 export type LogEntry = { id: string; pkg?: string; title: string; sub: string; at: number };
 export type AppState = {
@@ -16,6 +20,9 @@ export type AppState = {
   autoReconnect: boolean;
   mode: 'wireless' | 'root';
   scripts: Script[];
+  plugins: Plugin[];
+  externalApi: boolean;
+  apiToken: string;
   quick: number[];
   presets: Preset[];
   profiles: Profile[];

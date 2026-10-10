@@ -30,6 +30,13 @@
       <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
     </service>
     <receiver android:name="expo.modules.densifynative.PairingReceiver" android:exported="false" />
+    <receiver android:name="expo.modules.densifynative.ExternalReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="com.densify.app.action.SET_DPI" />
+        <action android:name="com.densify.app.action.RESTORE" />
+        <action android:name="com.densify.app.action.TOGGLE_STRETCH" />
+      </intent-filter>
+    </receiver>
     <receiver android:name="expo.modules.densifynative.BootReceiver" android:exported="true">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
     </receiver>

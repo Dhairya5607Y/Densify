@@ -102,6 +102,8 @@ export function Settings() {
       <Section title="Tools" />
       <Group>
         <Row leadIcon="code" title="Automation scripts" sub={`${state.scripts.length} script${state.scripts.length === 1 ? '' : 's'} · run when a game starts, exits or the phone boots`} onPress={() => nav.push({ name: 'scripts' })} right={<Icon name="chevron-right" />} />
+        <Row leadIcon="extension" title="Plugins" sub={`${state.plugins.length} installed · actions, hooks and WebUI`} onPress={() => nav.push({ name: 'plugins' })} right={<Icon name="chevron-right" />} />
+        <Row leadIcon="developer-mode" title="Developer" sub="Tweaks, power menu, settings editor, external API" onPress={() => nav.push({ name: 'developer' })} right={<Icon name="chevron-right" />} />
         <Row leadIcon="terminal" title="Terminal, logs and backup" sub="Run shell commands, read activity, troubleshoot" onPress={() => nav.push({ name: 'tools' })} right={<Icon name="chevron-right" />} />
       </Group>
 

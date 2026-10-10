@@ -16,7 +16,10 @@ function toEngine(s: AppState) {
     autoReconnect: s.autoReconnect,
     mode: s.mode,
     quick: s.quick,
-    scripts: s.scripts.map((x) => ({ name: x.name, code: x.code, trigger: x.trigger, pkg: x.pkg, on: x.on })),
+    scripts: [
+      ...s.scripts.map((x) => ({ name: x.name, code: x.code, trigger: x.trigger, pkg: x.pkg, on: x.on })),
+      ...s.plugins.filter((p) => p.on).flatMap((p) => p.hooks.map((h) => ({ name: p.name, code: h.code, trigger: h.trigger, pkg: h.pkg ?? '', on: true }))),
+    ],
     profiles: s.profiles.map((p) => ({ pkg: p.pkg, name: p.name, dpi: p.dpi, auto: p.auto, restore: p.restore, bundle: resolveBundle(s, p), stretch: p.stretch ?? NO_STRETCH })),
   };
 }
@@ -44,6 +47,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (first.current) { first.current = false; }
     api.storageSet('app', JSON.stringify(state));
     api.storageSet('engine', JSON.stringify(toEngine(state)));
+    api.storageSet('externalApi', state.externalApi ? '1' : '0');
+    api.storageSet('apiToken', state.apiToken);
     api.setFlags(state.automation, state.restoreOnBoot);
   }, [state]);
   const update = useCallback((fn: (s: AppState) => AppState) => setState(fn), []);

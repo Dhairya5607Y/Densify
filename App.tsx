@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -20,6 +20,11 @@ import { Settings } from './src/screens/Settings';
 import { Setup } from './src/screens/Setup';
 import { Scripts } from './src/screens/Scripts';
 import { Tools } from './src/screens/Tools';
+import { Plugins } from './src/screens/Plugins';
+import { PluginUI } from './src/screens/PluginUI';
+import { Developer } from './src/screens/Developer';
+import { SettingsEditor } from './src/screens/SettingsEditor';
+import { CrashScreen, installCrashHandler } from './src/screens/Crash';
 
 function Slide({ children }: { children: React.ReactNode }) {
   const a = useRef(new Animated.Value(0)).current;
@@ -40,7 +45,7 @@ function Shell() {
       {nav.tab === 'settings' && <Settings />}
       <TabBar tab={nav.tab} onTab={nav.setTab} />
       {r && (
-        <Slide key={r.name + (r.name === 'profile' ? r.pkg : '')}>
+        <Slide key={r.name + (r.name === 'profile' ? r.pkg : r.name === 'webui' ? r.id : '')}>
           <View style={{ flex: 1 }}>
             <Backdrop />
             {r.name === 'profile' && <Profile pkg={r.pkg} label={r.label} />}
@@ -48,6 +53,10 @@ function Shell() {
             {r.name === 'presets' && <Presets />}
             {r.name === 'tools' && <Tools />}
             {r.name === 'scripts' && <Scripts />}
+            {r.name === 'plugins' && <Plugins />}
+            {r.name === 'webui' && <PluginUI id={r.id} />}
+            {r.name === 'developer' && <Developer />}
+            {r.name === 'settingsEditor' && <SettingsEditor />}
           </View>
         </Slide>
       )}
@@ -74,6 +83,10 @@ function WithPerms() {
   return <PermissionProvider onSetup={() => nav.push({ name: 'setup' })}><Shell /></PermissionProvider>;
 }
 
+installCrashHandler();
+
 export default function App() {
+  const [crash, setCrash] = useState<string>(() => api.storageGet('crash') ?? '');
+  if (crash) return <CrashScreen report={crash} onClose={() => setCrash('')} />;
   return <SafeAreaProvider><StoreProvider><Themed /></StoreProvider></SafeAreaProvider>;
 }
