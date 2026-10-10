@@ -60,6 +60,7 @@ class DensifyNativeModule : Module() {
     }
     Function("isBatteryUnrestricted") { ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName) }
     Function("hasSecureSettings") { ctx.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED }
+    Function("hasOverlay") { Settings.canDrawOverlays(ctx) }
     Function("adbConnected") { Hub.adb.isConnected }
     Function("isMonitoring") { Hub.engine.state.value.running }
     Function("battery") { val b = batteryInfo(ctx); mapOf("level" to b.level, "charging" to b.charging, "tempC" to b.tempC.toDouble()) }
@@ -67,6 +68,7 @@ class DensifyNativeModule : Module() {
       val i = when (kind) {
         "usage" -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         "developer" -> Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+        "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
         "battery" -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
         "notifications" -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
         else -> Intent(Settings.ACTION_SETTINGS)
@@ -123,6 +125,25 @@ class DensifyNativeModule : Module() {
     AsyncFunction("readDensity") { promise: Promise -> run(promise) { val d = Hub.adb.readDensity().orThrow(); mapOf("physical" to d.physical, "effective" to d.effective) } }
     AsyncFunction("setDensity") { dpi: Int, promise: Promise -> run(promise) { Hub.adb.setDensity(dpi).orThrow() } }
     AsyncFunction("restoreDefault") { promise: Promise -> run(promise) { Hub.engine.restoreAll().orThrow() } }
+
+    // ---- screen size (stretch) ----
+    AsyncFunction("readSize") { promise: Promise ->
+      run(promise) { val z = Hub.adb.readSize().orThrow(); mapOf("physW" to z.physW, "physH" to z.physH, "override" to z.overrideText) }
+    }
+    AsyncFunction("setSize") { w: Int, h: Int, promise: Promise -> run(promise) { Hub.adb.setSize(w, h).orThrow(); true } }
+    AsyncFunction("resetSize") { promise: Promise -> run(promise) { Hub.adb.resetSize().orThrow(); true } }
+
+    // ---- shell, logs, floating preview ----
+    AsyncFunction("shell") { cmd: String, promise: Promise ->
+      run(promise) { Hub.log("$ " + cmd.take(80)); Hub.adb.exec(cmd).orThrow() }
+    }
+    Function("logs") { Hub.logs() }
+    Function("clearLogs") { Hub.clearLogs(); true }
+    Function("previewFloating") { seconds: Int ->
+      Hub.floatForceUntil = android.os.SystemClock.elapsedRealtime() + seconds.coerceIn(1, 60) * 1000L
+      true
+    }
+    AsyncFunction("disconnect") { promise: Promise -> run(promise) { Hub.adb.disconnect(); true } }
 
     // ---- monitoring ----
     Function("startMonitoring") { MonitorService.start(ctx); true }

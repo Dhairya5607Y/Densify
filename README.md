@@ -2,7 +2,7 @@
 
 Per-game display density automation with on-device Wireless Debugging. No root, no Shizuku, no PC after setup.
 
-- **App:** Expo (React Native, TypeScript). Six design-language themes (Matte, Glass, Material You, HUD, Paper, Ember).
+- **App:** Expo (React Native, TypeScript). Seven design-language themes (Matte, Graphite, Manga, Material You, HUD, Paper, Ember).
 - **Native engine:** local Expo module `modules/densify-native` (Kotlin): on-device ADB, foreground service, Quick Settings tile, notification controls.
 - **No hardcoded games:** the list comes from the phone's installed apps (launcher activities, `CATEGORY_GAME`). No game or package names exist anywhere in the source.
 - **Storage:** all settings, profiles, presets and quick values persist on the device (SharedPreferences through the native module).
@@ -24,7 +24,10 @@ Per-game display density automation with on-device Wireless Debugging. No root, 
 3. Settings → Detect current DPI, then add a game and save a profile.
 
 ## Not in this alpha (removed from the UI rather than faked)
-Floating panel overlay, touch guard, break reminder, charger-aware presets, automation intents, profile backup.
+Touch guard, break reminder, charger-aware presets, automation intents.
+
+## New in 1.1
+Floating DPI panel over games, per-game stretch screen, automation scripts (game start / exit / boot), terminal, activity log, backup and restore, root mode, Wi-Fi auto-reconnect, Graphite and Manga themes (Glass removed).
 
 ## Unverified
 The Kotlin module has not been compiled yet. The likeliest first-build errors are `libadb-android` API names (`connectTls`, `pair`, `openStream`) and the `sun.security.x509` imports. Send the EAS build log and they get fixed.

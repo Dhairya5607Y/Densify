@@ -2,10 +2,10 @@
   "expo": {
     "name": "Densify",
     "slug": "densify",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -17,7 +17,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.densify.app"
+      "package": "com.densify.app",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,6 +36,12 @@
         }
       ]
     ],
-    "scheme": "densify"
+    "scheme": "densify",
+    "owner": "dhiru5040s-team",
+    "extra": {
+      "eas": {
+        "projectId": "311a89c6-bdd1-46fc-b326-b42d94857e47"
+      }
+    }
   }
 }

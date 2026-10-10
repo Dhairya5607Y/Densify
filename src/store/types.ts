@@ -1,7 +1,9 @@
 export type Bundle = { hz: boolean; perf: boolean; dnd: boolean; rot: boolean; guard: boolean; bright: boolean; awake: boolean };
 export type BundleKey = keyof Bundle;
 export type Preset = { id: string; name: string; bundle: Bundle };
-export type Profile = { pkg: string; name: string; dpi: number; auto: boolean; restore: boolean; presetId: string; bundle: Bundle };
+export type Stretch = { on: boolean; mode: 'ratio' | 'custom'; ratio: string; w: number; h: number };
+export type Script = { id: string; name: string; code: string; trigger: 'start' | 'exit' | 'boot'; pkg: string; on: boolean };
+export type Profile = { pkg: string; name: string; dpi: number; auto: boolean; restore: boolean; presetId: string; bundle: Bundle; stretch?: Stretch };
 export type LogEntry = { id: string; pkg?: string; title: string; sub: string; at: number };
 export type AppState = {
   themeId: string;
@@ -10,6 +12,10 @@ export type AppState = {
   restoreOnBoot: boolean;
   lowBattery: boolean;
   lowBatteryPercent: number;
+  floating: 'off' | 'gaming' | 'always';
+  autoReconnect: boolean;
+  mode: 'wireless' | 'root';
+  scripts: Script[];
   quick: number[];
   presets: Preset[];
   profiles: Profile[];

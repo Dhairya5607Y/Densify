@@ -22,8 +22,8 @@ export function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   useEffect(() => { Animated.timing(solid, { toValue: dir === 'down' ? 1 : 0, duration: 220, useNativeDriver: true }).start(); }, [dir]);
   return (
     <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom, overflow: 'hidden' }}>
-      <BlurView intensity={t.surface === 'glass' ? t.blur : 35} tint={t.dark ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: hexA(t.c.bg, t.surface === 'glass' ? 0.25 : 0.5) }]} />
+      <BlurView intensity={35} tint={t.dark ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: hexA(t.c.bg, 0.5) }]} />
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg, opacity: solid }]} />
       <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.c.bd2 }} />
       <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 8 }}>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { api, Capabilities, useAdb } from '../native/api';
-import { NO_BUNDLE } from '../store/defaults';
+import { NO_BUNDLE, NO_STRETCH } from '../store/defaults';
 import { useStore } from '../store/store';
 import type { Bundle, Profile as P } from '../store/types';
 import { useTheme } from '../theme/ThemeContext';
@@ -32,6 +32,9 @@ export function Profile({ pkg, label }: { pkg: string; label: string }) {
   }, [keep?.v]);
   useEffect(() => { if (keep && keep.t <= 0) revert(); }, [keep?.t]);
 
+  const sx = d.stretch ?? NO_STRETCH;
+  const setSx = (p: Partial<typeof sx>) => setD((x) => ({ ...x, stretch: { ...(x.stretch ?? NO_STRETCH), ...p } }));
+  const toggleStretch = async (v: boolean) => { if (v && !(await ensure('stretch'))) return; setSx({ on: v }); };
   const eff: Bundle = d.presetId === 'custom' ? d.bundle : state.presets.find((p) => p.id === d.presetId)?.bundle ?? d.bundle;
   const dirty = JSON.stringify(d) !== JSON.stringify(existing ?? null);
   const setDpi = (v: number) => { setD((x) => ({ ...x, dpi: v })); setText(String(v)); setErr(''); };
@@ -114,6 +117,31 @@ export function Profile({ pkg, label }: { pkg: string; label: string }) {
         <Chip h={38} label="Custom" on={d.presetId === 'custom'} onPress={() => setD((x) => ({ ...x, presetId: 'custom', bundle: eff }))} />
       </View>
       <Group>{BUNDLE_ITEMS.map(rowFor)}</Group>
+
+      <Section title="Stretch screen" />
+      <Group>
+        <Row leadIcon="aspect-ratio" title="Stretch when it launches" sub={`Changes the screen shape while ${d.name} is open, then restores it`} right={<AppSwitch on={sx.on} onChange={toggleStretch} />} />
+      </Group>
+      {sx.on && (
+        <Surface pad={14} style={{ marginTop: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+            <Chip h={40} label="Ratio" on={sx.mode === 'ratio'} onPress={() => setSx({ mode: 'ratio' })} />
+            <Chip h={40} label="Exact size" on={sx.mode === 'custom'} onPress={() => setSx({ mode: 'custom' })} />
+          </View>
+          {sx.mode === 'ratio' ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {['4:3', '5:4', '16:10', '3:2', '1:1'].map((r) => <Chip key={r} h={40} label={r} on={sx.ratio === r} onPress={() => setSx({ ratio: r })} />)}
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TextInput value={sx.w ? String(sx.w) : ''} placeholder="Width" placeholderTextColor={t.c.mu} keyboardType="number-pad" onChangeText={(v) => setSx({ w: Number(v.replace(/\D/g, '').slice(0, 4)) })} style={{ flex: 1, height: 46, borderRadius: t.rs, borderWidth: 1.5, borderColor: t.c.bd2, color: t.c.tx, paddingHorizontal: 14, fontSize: 16 }} />
+              <T v="sub">×</T>
+              <TextInput value={sx.h ? String(sx.h) : ''} placeholder="Height" placeholderTextColor={t.c.mu} keyboardType="number-pad" onChangeText={(v) => setSx({ h: Number(v.replace(/\D/g, '').slice(0, 4)) })} style={{ flex: 1, height: 46, borderRadius: t.rs, borderWidth: 1.5, borderColor: t.c.bd2, color: t.c.tx, paddingHorizontal: 14, fontSize: 16 }} />
+            </View>
+          )}
+          <T v="sub" style={{ marginTop: 10 }}>Only the screen shape changes, with black bars where needed. If anything looks wrong, Restore in the notification or floating panel resets it.</T>
+        </Surface>
+      )}
 
       <Section title="Automation" />
       <Group>

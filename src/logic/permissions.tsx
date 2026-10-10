@@ -6,7 +6,7 @@ import { Sheet } from '../ui/overlays';
 import { Btn, Icon, T } from '../ui/primitives';
 import { NEEDS, REQ, Req } from './features';
 
-const have = (r: Req) => r === 'notifications' ? api.hasNotifications() : r === 'usage' ? api.hasUsageAccess() : r === 'adb' ? api.adbConnected() : api.isBatteryUnrestricted();
+const have = (r: Req) => r === 'notifications' ? api.hasNotifications() : r === 'usage' ? api.hasUsageAccess() : r === 'adb' ? api.adbConnected() : r === 'overlay' ? api.hasOverlay() : api.isBatteryUnrestricted();
 const nextActive = () => new Promise<void>((res) => { const s = AppState.addEventListener('change', (st) => { if (st === 'active') { s.remove(); res(); } }); });
 
 type Ensure = (feature: string) => Promise<boolean>;
@@ -30,7 +30,7 @@ export function PermissionProvider({ children, onSetup }: { children: React.Reac
       if (r === 'notifications') {
         const g = Number(Platform.Version) >= 33 ? await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS' as never) : 'granted';
         if (g === 'never_ask_again') { api.openSettings('notifications'); await nextActive(); }
-      } else { api.openSettings(r === 'usage' ? 'usage' : 'battery'); await nextActive(); }
+      } else { api.openSettings(r === 'usage' ? 'usage' : r === 'overlay' ? 'overlay' : 'battery'); await nextActive(); }
       if (!have(r)) return false;
     }
     return true;

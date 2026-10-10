@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, PanResponder, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme/ThemeContext';
@@ -49,13 +48,12 @@ export function Surface({ children, style, radius, pad }: { children?: React.Rea
   const t = useTheme();
   const base: ViewStyle = {
     borderRadius: radius ?? t.r, borderWidth: t.bw, borderColor: t.c.bd, overflow: 'hidden',
+    ...(t.surface === 'ink' ? { borderRightWidth: 5, borderBottomWidth: 5 } : null),
     backgroundColor: t.surface === 'outline' ? 'transparent' : t.c.sf, elevation: t.elev,
     shadowColor: '#0c1620', shadowOpacity: t.elev ? 0.08 : 0, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, padding: pad,
   };
   return (
     <View style={[base, style]}>
-      {t.surface === 'glass' && <BlurView intensity={t.blur} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />}
-      {t.surface === 'glass' && <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,.28)' }} />}
       {t.surface === 'hud' && (<>
         <Corner s={{ top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 }} /><Corner s={{ top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 }} />
         <Corner s={{ bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 }} /><Corner s={{ bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 }} />

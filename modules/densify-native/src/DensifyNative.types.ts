@@ -3,7 +3,7 @@ export type AdbEvent = { state: AdbState; message?: string | null };
 export type EngineEvent = { running: boolean; appliedDpi?: number | null; activePkg?: string | null; errTitle?: string | null; errHint?: string | null };
 export type InstalledApp = { pkg: string; name: string; isGame: boolean };
 export type Capabilities = { hz: number; perf: boolean; guard: boolean; tile: boolean };
-export type SettingsKind = 'usage' | 'developer' | 'battery' | 'notifications' | 'settings';
+export type SettingsKind = 'usage' | 'developer' | 'overlay' | 'battery' | 'notifications' | 'settings';
 export type NativeEvents = { onAdb: (e: AdbEvent) => void; onEngine: (e: EngineEvent) => void };
 export interface NativeApi {
   storageGet(key: string): string | null;
@@ -13,6 +13,7 @@ export interface NativeApi {
   hasNotifications(): boolean;
   isBatteryUnrestricted(): boolean;
   hasSecureSettings(): boolean;
+  hasOverlay(): boolean;
   adbConnected(): boolean;
   isMonitoring(): boolean;
   battery(): { level: number; charging: boolean; tempC: number };
@@ -27,6 +28,14 @@ export interface NativeApi {
   readDensity(): Promise<{ physical: number; effective: number }>;
   setDensity(dpi: number): Promise<number>;
   restoreDefault(): Promise<number>;
+  readSize(): Promise<{ physW: number; physH: number; override: string | null }>;
+  setSize(w: number, h: number): Promise<boolean>;
+  resetSize(): Promise<boolean>;
+  shell(cmd: string): Promise<string>;
+  logs(): string[];
+  clearLogs(): boolean;
+  previewFloating(seconds: number): boolean;
+  disconnect(): Promise<boolean>;
   startMonitoring(): boolean;
   stopMonitoring(): boolean;
 }

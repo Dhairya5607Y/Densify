@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../native/api';
-import { DEFAULT_STATE } from './defaults';
+import { DEFAULT_STATE, NO_STRETCH } from './defaults';
 import type { AppState, Bundle, Profile } from './types';
 
 export const resolveBundle = (s: AppState, p: Profile): Bundle => s.presets.find((x) => x.id === p.presetId)?.bundle ?? p.bundle;
@@ -12,8 +12,12 @@ function toEngine(s: AppState) {
     automation: s.automation,
     lowBattery: s.lowBattery,
     lowBatteryPercent: s.lowBatteryPercent,
+    floating: s.floating,
+    autoReconnect: s.autoReconnect,
+    mode: s.mode,
     quick: s.quick,
-    profiles: s.profiles.map((p) => ({ pkg: p.pkg, name: p.name, dpi: p.dpi, auto: p.auto, restore: p.restore, bundle: resolveBundle(s, p) })),
+    scripts: s.scripts.map((x) => ({ name: x.name, code: x.code, trigger: x.trigger, pkg: x.pkg, on: x.on })),
+    profiles: s.profiles.map((p) => ({ pkg: p.pkg, name: p.name, dpi: p.dpi, auto: p.auto, restore: p.restore, bundle: resolveBundle(s, p), stretch: p.stretch ?? NO_STRETCH })),
   };
 }
 
@@ -22,6 +26,7 @@ function load(): AppState {
     const raw = api.storageGet('app');
     if (!raw) return DEFAULT_STATE;
     const o = JSON.parse(raw);
+    if (o.themeId === 'glass') o.themeId = 'graphite'; // Glass was removed
     return { ...DEFAULT_STATE, ...o, flags: { ...DEFAULT_STATE.flags, ...(o.flags ?? {}) } };
   } catch {
     return DEFAULT_STATE; // corrupted storage: start clean instead of crashing

@@ -18,6 +18,8 @@ import { Presets } from './src/screens/Presets';
 import { Profile } from './src/screens/Profile';
 import { Settings } from './src/screens/Settings';
 import { Setup } from './src/screens/Setup';
+import { Scripts } from './src/screens/Scripts';
+import { Tools } from './src/screens/Tools';
 
 function Slide({ children }: { children: React.ReactNode }) {
   const a = useRef(new Animated.Value(0)).current;
@@ -44,6 +46,8 @@ function Shell() {
             {r.name === 'profile' && <Profile pkg={r.pkg} label={r.label} />}
             {r.name === 'setup' && <Setup />}
             {r.name === 'presets' && <Presets />}
+            {r.name === 'tools' && <Tools />}
+            {r.name === 'scripts' && <Scripts />}
           </View>
         </Slide>
       )}

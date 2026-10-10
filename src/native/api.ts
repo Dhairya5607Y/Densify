@@ -16,6 +16,10 @@ export const api = {
   hasUsageAccess: () => (Native ? Native.hasUsageAccess() : false),
   hasNotifications: () => (Native ? Native.hasNotifications() : false),
   isBatteryUnrestricted: () => (Native ? Native.isBatteryUnrestricted() : false),
+  hasOverlay: () => (Native ? Native.hasOverlay() : false),
+  logs: () => (Native ? Native.logs() : []),
+  clearLogs: () => (Native ? Native.clearLogs() : false),
+  previewFloating: (sec: number) => (Native ? Native.previewFloating(sec) : false),
   adbConnected: () => (Native ? Native.adbConnected() : false),
   isMonitoring: () => (Native ? Native.isMonitoring() : false),
   openSettings: (k: SettingsKind) => (Native ? Native.openSettings(k) : false),
@@ -30,6 +34,11 @@ export const api = {
   capabilities: async (): Promise<Capabilities> => (Native ? Native.capabilities().catch(() => caps0) : caps0),
   readDensity: async () => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.readDensity(); },
   setDensity: async (dpi: number) => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.setDensity(dpi); },
+  readSize: async () => { if (!Native) throw new Error('Screen size control is only available in the installed app.'); return Native.readSize(); },
+  setSize: async (w: number, h: number) => { if (!Native) throw new Error('Not available here.'); return Native.setSize(w, h); },
+  resetSize: async () => { if (!Native) throw new Error('Not available here.'); return Native.resetSize(); },
+  shell: async (cmd: string) => { if (!Native) throw new Error('The shell is only available in the installed app.'); return Native.shell(cmd); },
+  disconnect: async () => (Native ? Native.disconnect() : false),
   restoreDefault: async () => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.restoreDefault(); },
 };
 
