@@ -126,7 +126,7 @@ class Engine(private val app: Context) {
         if (!Hub.detector.hasAccess()) {
           _state.update { it.copy(errTitle = "Usage Access is off.", errHint = "Allow Usage Access so Densify can see which game is open.") }
         } else tick()
-        delay(if (Hub.detector.screenOn) 1_500 else 6_000)
+        delay(if (!Hub.detector.screenOn) 6_000 else if (active != null) 700L else 1_500L)
       }
     }
   }
@@ -163,7 +163,8 @@ class Engine(private val app: Context) {
       }
       val now = SystemClock.elapsedRealtime()
       if (leftAt == 0L) { leftAt = now; return }
-      if (now - leftAt >= GRACE_MS) { if (a.restore) restoreAll(c) else { active = null; leftAt = 0 } }
+      // Leaving the game for any reason (home, recents, another app, screen off) always returns DPI and size to the default.
+      if (now - leftAt >= GRACE_MS) restoreAll(c)
     }
   }
 
@@ -294,7 +295,7 @@ class Engine(private val app: Context) {
     }
   }
 
-  companion object { const val GRACE_MS = 2_000L }
+  companion object { const val GRACE_MS = 1_200L }
 }
 
 data class BatteryInfo(val level: Int, val charging: Boolean, val tempC: Float)

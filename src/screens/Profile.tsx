@@ -146,7 +146,7 @@ export function Profile({ pkg, label }: { pkg: string; label: string }) {
       <Section title="Automation" />
       <Group>
         <Row title="Automatically apply" sub={`Switch to ${d.dpi} DPI when ${d.name} launches`} right={<AppSwitch on={d.auto} onChange={(v) => setD((x) => ({ ...x, auto: v }))} />} />
-        <Row title="Restore everything" sub={`Return DPI and every setting above when ${d.name} closes`} right={<AppSwitch on={d.restore} onChange={(v) => setD((x) => ({ ...x, restore: v }))} />} />
+        <Row title="Restores automatically" sub={`When ${d.name} goes to the background or closes, DPI and every setting above return to normal`} />
       </Group>
     </Screen>
   );
