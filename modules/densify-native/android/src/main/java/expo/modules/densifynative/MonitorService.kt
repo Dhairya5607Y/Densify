@@ -9,6 +9,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.provider.Settings
@@ -38,7 +39,8 @@ class MonitorService : Service() {
       }
       ACTION_STOP -> { shutdown(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
     }
-    startForeground(Notifs.ID_MONITOR, build("Densify is running", "Tap an action to change DPI."), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+    val first = build("Densify is running", "Tap an action to change DPI.")
+    if (Build.VERSION.SDK_INT >= 34) startForeground(Notifs.ID_MONITOR, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(Notifs.ID_MONITOR, first)
     Hub.scope.launch {
       if (!Hub.adb.isConnected) Hub.adb.connect()
       Hub.engine.start()
@@ -67,6 +69,7 @@ class MonitorService : Service() {
     floatJob?.cancel()
     floatJob = Hub.scope.launch {
       while (isActive) {
+        runCatching { ShizukuHost.tick(this@MonitorService, Hub.detector.foreground) }
         val c = Hub.engine.config()
         val s = Hub.engine.state.value
         val key = s.activePkg ?: "always"

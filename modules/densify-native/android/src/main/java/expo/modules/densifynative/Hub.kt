@@ -7,12 +7,15 @@ import android.view.Display
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.conscrypt.Conscrypt
+import java.io.InputStream
+import java.io.OutputStream
 import java.security.Security
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -24,6 +27,12 @@ data class Density(val physical: Int, val ovr: Int?) { val effective: Int get() 
 /** Physical panel size and the current override (null when the size is not overridden). */
 data class ScreenSize(val physW: Int, val physH: Int, val ovrW: Int?, val ovrH: Int?) {
   val overrideText: String? get() = if (ovrW != null && ovrH != null) "${ovrW}x${ovrH}" else null
+}
+
+/** A running command: stdin, stdout (stderr merged) and a way to stop it. */
+class ProcLike(val input: InputStream, val output: OutputStream, private val stop: () -> Unit, private val exit: () -> Int?) {
+  fun destroy() = runCatching { stop() }
+  fun exitValue(): Int? = runCatching { exit() }.getOrNull()
 }
 
 /** Process-wide singletons shared by the JS module, the services and the tile. */
@@ -84,10 +93,15 @@ class AdbHub(private val ctx: Context) {
   suspend fun connect(): Result<Unit> = lock.withLock {
     withContext(Dispatchers.IO) {
       if (rootMode) return@withContext connectRoot()
-      if (Build.VERSION.SDK_INT < 30) return@withContext fail("Wireless Debugging needs Android 11 or newer.")
+      val tcpip = Hub.engine.config().mode == "tcpip"
+      if (!tcpip && Build.VERSION.SDK_INT < 30) return@withContext fail("Wireless Debugging needs Android 11 or newer. On Android 10 and below, use \"From a computer\" in Settings.")
       if (isConnected) { _state.value = AdbState("connected"); return@withContext Result.success(Unit) }
       _state.value = AdbState("connecting")
       try {
+        if (tcpip) {
+          if (mgr.connect("127.0.0.1", 5555)) { _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port 5555)"); return@withContext Result.success(Unit) }
+          return@withContext fail("Couldn't reach adb on port 5555. On your computer run: adb tcpip 5555")
+        }
         if (mgr.connectTls(ctx, 6_000)) { _state.value = AdbState("connected"); Hub.log("Connected over Wireless Debugging"); Result.success(Unit) }
         else fail("Couldn't reach Wireless Debugging. Turn it on and make sure you're on Wi-Fi.")
       } catch (t: Throwable) { fail(t.message ?: "Connection failed.") }
@@ -141,7 +155,68 @@ class AdbHub(private val ctx: Context) {
 
   suspend fun getSetting(ns: String, key: String): String = exec("settings get $ns $key").getOrNull()?.trim().orEmpty().ifEmpty { "null" }
 
-  fun disconnect() { runCatching { mgr.disconnect() }; rootOk = false; _state.value = AdbState("disconnected") }
+  /** Starts a command (or an interactive shell when [cmd] is null) with live streams. */
+  suspend fun openProcess(cmd: String?): Result<ProcLike> = withContext(Dispatchers.IO) {
+    runCatching {
+      if (!isConnected) connect().getOrThrow()
+      if (rootMode) {
+        val p = (if (cmd == null) ProcessBuilder("su") else ProcessBuilder("su", "-c", cmd)).redirectErrorStream(true).start()
+        ProcLike(p.inputStream, p.outputStream, { p.destroy() }, { p.exitValue() })
+      } else {
+        val st = mgr.openStream(if (cmd == null) "shell:" else "shell:$cmd")
+        ProcLike(st.openInputStream(), st.openOutputStream(), { st.close() }, { if (st.isClosed) 0 else null })
+      }
+    }
+  }
+
+  // ---- one long-lived shell, so "cd" and variables persist like a real terminal ----
+  private var sess: ProcLike? = null
+  private val sessLock = Mutex()
+
+  fun resetSession() { sess?.destroy(); sess = null }
+
+  private suspend fun ensureSession(): ProcLike {
+    sess?.let { return it }
+    val s = openProcess(null).getOrThrow()
+    val a = (100..499).random(); val b = (100..499).random()
+    s.output.write("stty -echo 2>/dev/null; PS1=''; PS2=''; echo __DNSY_\$(($a+$b))_0\n".toByteArray()); s.output.flush()
+    val dog = Hub.scope.launch { kotlinx.coroutines.delay(15_000); s.destroy() }
+    try { readUntil(s, "__DNSY_${a + b}_", 15_000) } finally { dog.cancel() }
+    sess = s
+    return s
+  }
+
+  /** Reads until the marker followed by an exit code appears, returning (text before marker, code). */
+  private fun readUntil(s: ProcLike, marker: String, timeoutMs: Long): Pair<String, Int> {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    val sb = StringBuilder()
+    val buf = ByteArray(4096)
+    val re = Regex(Regex.escape(marker) + "(-?\\d+)")
+    while (true) {
+      if (System.currentTimeMillis() > deadline) { s.destroy(); throw IllegalStateException("Command timed out. The shell was reset.") }
+      val n = s.input.read(buf)
+      if (n < 0) { s.destroy(); throw IllegalStateException("The shell closed.") }
+      sb.append(String(buf, 0, n))
+      val m = re.find(sb)
+      if (m != null) return Pair(sb.substring(0, m.range.first).replace("\r\n", "\n").trimEnd('\n'), m.groupValues[1].toInt())
+    }
+  }
+
+  suspend fun sessionExec(cmd: String, timeoutMs: Long = 60_000): Result<String> = sessLock.withLock {
+    withContext(Dispatchers.IO) {
+      runCatching {
+        val s = ensureSession()
+        val a = (100..499).random(); val b = (100..499).random()
+        val line = "$cmd\n__rc=\$?; echo __DNSY_\$(($a+$b))_\$__rc\n"
+        try { s.output.write(line.toByteArray()); s.output.flush() } catch (t: Throwable) { resetSession(); throw t }
+        // A watchdog closes the stream on timeout, which unblocks the read below.
+        val dog = Hub.scope.launch { kotlinx.coroutines.delay(timeoutMs); s.destroy() }
+        try { readUntil(s, "__DNSY_${a + b}_", timeoutMs + 2_000).first } catch (t: Throwable) { resetSession(); throw t } finally { dog.cancel() }
+      }
+    }
+  }
+
+  fun disconnect() { resetSession(); runCatching { mgr.disconnect() }; rootOk = false; _state.value = AdbState("disconnected") }
 
   suspend fun readDensity(): Result<Density> = exec("wm density").mapCatching { out ->
     val phys = Regex("Physical density:\\s*(\\d+)").find(out)?.groupValues?.get(1)?.toInt() ?: error("Couldn't read the current DPI.")

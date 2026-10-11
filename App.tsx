@@ -6,7 +6,7 @@ import { api } from './src/native/api';
 import { NavProvider, useNav } from './src/nav';
 import { StoreProvider, useStore } from './src/store/store';
 import { ThemeProvider } from './src/theme/ThemeContext';
-import { themeById } from './src/theme/themes';
+import { themeById, withAccent } from './src/theme/themes';
 import { PermissionProvider } from './src/logic/permissions';
 import { Backdrop } from './src/ui/Backdrop';
 import { ToastProvider } from './src/ui/overlays';
@@ -68,7 +68,8 @@ function Shell() {
 
 function Themed() {
   const { state } = useStore();
-  const theme = themeById(state.themeId);
+  const base = themeById(state.themeId);
+  const theme = state.accent ? withAccent(base, state.accent) : base;
   return (
     <ThemeProvider theme={theme}>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />

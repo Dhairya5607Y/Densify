@@ -14,6 +14,9 @@ class ForegroundDetector(private val ctx: Context) {
   private var lastQuery = System.currentTimeMillis() - 60_000
   private var current: String? = null
 
+  /** The app currently in front, as of the last poll. */
+  val foreground: String? get() = current
+
   val screenOn: Boolean get() = pm.isInteractive
 
   fun hasAccess(): Boolean {

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Share, TextInput, View } from 'react-native';
 import { api } from '../native/api';
-import { shq } from '../logic/axplugin';
 import { useStore } from '../store/store';
 import { DEFAULT_STATE } from '../store/defaults';
 import { useTheme } from '../theme/ThemeContext';
@@ -26,7 +25,7 @@ export function Tools() {
   const [cmd, setCmd] = useState('');
   const [out, setOut] = useState('');
   const [busy, setBusy] = useState(false);
-  const [cwd, setCwd] = useState('/data/local/tmp');
+  const [cwd, setCwd] = useState('~');
   const [logs, setLogs] = useState<string[]>([]);
   const [restoreText, setRestoreText] = useState('');
   useEffect(() => { const read = () => setLogs(api.logs().slice(-60).reverse()); read(); const id = setInterval(read, 2000); return () => clearInterval(id); }, []);
@@ -37,9 +36,8 @@ export function Tools() {
     if (!(await ensure('shell'))) return;
     setBusy(true);
     try {
-      const raw = await api.shell(`cd ${shq(cwd)} 2>/dev/null; ${c}\necho __DENSIFY_PWD__$(pwd)`);
-      const i = raw.lastIndexOf('__DENSIFY_PWD__');
-      if (i >= 0) { setCwd(raw.slice(i + 15).trim() || cwd); setOut(raw.slice(0, i).trimEnd() || '(no output)'); } else setOut(raw || '(no output)');
+      setOut((await api.session(c)) || '(no output)');
+      setCwd((await api.session('pwd')).trim() || cwd);
     } catch (e) { setOut(`Error: ${(e as Error).message}`); }
     setBusy(false);
   };
@@ -63,7 +61,7 @@ export function Tools() {
         <TextInput value={cmd} onChangeText={setCmd} onSubmitEditing={run} placeholder="wm size" placeholderTextColor={t.c.mu} autoCapitalize="none" autoCorrect={false} style={[box, { height: 46 }]} />
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
           <View style={{ flex: 1 }}><Btn wide v="pri" label={busy ? 'Running…' : 'Run'} disabled={busy} onPress={run} /></View>
-          <Btn v="tonal" label="Clear" onPress={() => setOut('')} />
+          <Btn v="tonal" label="Clear" onPress={() => setOut('')} /><Btn v="tonal" label="Reset" onPress={() => { api.sessionReset(); setCwd('~'); setOut('Shell reset'); }} />
         </View>
         {out ? <T v="sub" c={t.c.tx2} style={{ marginTop: 12, fontFamily: 'monospace', fontSize: 12.5 }}>{out}</T> : null}
       </Surface>

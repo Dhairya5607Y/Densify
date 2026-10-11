@@ -7,6 +7,7 @@ export const NO_BUNDLE: Bundle = { hz: false, perf: false, dnd: false, rot: fals
 /** Seed values only. Everything here is editable in the app and then lives in storage. */
 export const DEFAULT_STATE: AppState = {
   themeId: 'matte',
+  accent: '',
   defaultDpi: 0, // 0 = not detected yet; set from the device on first run
   automation: false,
   restoreOnBoot: true,

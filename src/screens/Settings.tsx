@@ -3,7 +3,7 @@ import { AppState, Pressable, TextInput, View } from 'react-native';
 import Constants from 'expo-constants';
 import { api, useAdb } from '../native/api';
 import { useStore } from '../store/store';
-import { THEMES } from '../theme/themes';
+import { ACCENTS, THEMES } from '../theme/themes';
 import { useTheme } from '../theme/ThemeContext';
 import { useNav } from '../nav';
 import { AppSwitch, Btn, Chip, Group, Icon, Row, Section, T } from '../ui/primitives';
@@ -94,8 +94,11 @@ export function Settings() {
 
       <Section title="Connection" />
       <Group>
-        <Row leadIcon="link" title={state.mode === 'root' ? 'Root access' : 'Wireless Debugging'} sub={stateLabel[0]} right={<Btn v={adb.state === 'connected' ? 'tonal' : 'pri'} label={state.mode === 'root' ? 'Connect' : 'Setup'} onPress={() => (state.mode === 'root' ? api.connect().catch((e: Error) => toast({ title: 'Root not available', sub: e.message, err: true })) : nav.push({ name: 'setup' }))} />} />
-        <Row leadIcon="admin-panel-settings" title="Use root instead" sub="For rooted phones: no Wireless Debugging needed" right={<AppSwitch on={state.mode === 'root'} onChange={(v) => { update((x) => ({ ...x, mode: v ? 'root' : 'wireless' })); api.disconnect(); }} />} />
+        <Row leadIcon="link" title={state.mode === 'root' ? 'Root access' : state.mode === 'tcpip' ? 'adb over network' : 'Wireless Debugging'} sub={stateLabel[0]} right={<Btn v={adb.state === 'connected' ? 'tonal' : 'pri'} label={state.mode === 'root' ? 'Connect' : 'Setup'} onPress={() => (state.mode === 'root' ? api.connect().catch((e: Error) => toast({ title: 'Root not available', sub: e.message, err: true })) : nav.push({ name: 'setup' }))} />} />
+        <Row leadIcon="admin-panel-settings" title="Connection method" sub={state.mode === 'root' ? 'Root' : state.mode === 'tcpip' ? 'From a computer (adb tcpip)' : 'Wireless Debugging (Android 11+)'} right={
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {([['wireless', 'Wi-Fi'], ['tcpip', 'PC'], ['root', 'Root']] as const).map(([m, l]) => <Chip key={m} h={36} label={l} on={state.mode === m} onPress={() => { update((x) => ({ ...x, mode: m })); api.disconnect(); }} />)}
+          </View>} />
         <Row leadIcon="wifi" title="Reconnect automatically" sub="Turns Wireless Debugging back on when Wi-Fi returns" right={<AppSwitch on={state.autoReconnect} onChange={(v) => update((x) => ({ ...x, autoReconnect: v }))} />} />
       </Group>
 
@@ -132,6 +135,12 @@ export function Settings() {
         })}
       </View>
       <T v="sub" style={{ marginHorizontal: 10, marginTop: 10 }}>{THEMES.find((x) => x.id === state.themeId)?.desc}</T>
+      <Section title="Accent colour" action={state.accent ? 'Reset' : undefined} onAction={() => update((s) => ({ ...s, accent: '' }))} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        {ACCENTS.map((c) => (
+          <Pressable key={c} onPress={() => update((s) => ({ ...s, accent: c }))} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c, borderWidth: state.accent === c ? 3 : 1, borderColor: state.accent === c ? t.c.tx : t.c.bd2 }} />
+        ))}
+      </View>
 
       <Section title="About" />
       <Group><Row leadIcon="info" title="Densify" sub={`Version ${Constants.expoConfig?.version ?? ''} · DPI only, never resolution`} /></Group>

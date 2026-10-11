@@ -144,6 +144,24 @@ class DensifyNativeModule : Module() {
       Hub.floatForceUntil = android.os.SystemClock.elapsedRealtime() + seconds.coerceIn(1, 60) * 1000L
       true
     }
+    AsyncFunction("sessionExec") { cmd: String, promise: Promise -> run(promise) { Hub.adb.sessionExec(cmd).orThrow() } }
+    Function("sessionReset") { Hub.adb.resetSession(); true }
+    AsyncFunction("listPackages") { promise: Promise ->
+      run(promise) {
+        val pm = ctx.packageManager
+        pm.getInstalledPackages(0).map { pi ->
+          val ai = pi.applicationInfo
+          mapOf(
+            "packageName" to pi.packageName,
+            "versionName" to (pi.versionName ?: ""),
+            "versionCode" to pi.longVersionCode.toDouble(),
+            "appLabel" to (ai?.let { pm.getApplicationLabel(it).toString() } ?: pi.packageName),
+            "isSystem" to (ai != null && (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0),
+            "uid" to (ai?.uid ?: -1),
+          )
+        }
+      }
+    }
     AsyncFunction("disconnect") { promise: Promise -> run(promise) { Hub.adb.disconnect(); true } }
 
     // ---- monitoring ----

@@ -11,6 +11,7 @@ export type Profile = { pkg: string; name: string; dpi: number; auto: boolean; r
 export type LogEntry = { id: string; pkg?: string; title: string; sub: string; at: number };
 export type AppState = {
   themeId: string;
+  accent: string;
   defaultDpi: number;
   automation: boolean;
   restoreOnBoot: boolean;
@@ -18,7 +19,7 @@ export type AppState = {
   lowBatteryPercent: number;
   floating: 'off' | 'gaming' | 'always';
   autoReconnect: boolean;
-  mode: 'wireless' | 'root';
+  mode: 'wireless' | 'root' | 'tcpip';
   scripts: Script[];
   plugins: Plugin[];
   externalApi: boolean;

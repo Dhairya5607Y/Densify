@@ -28,7 +28,7 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 30,
+            "minSdkVersion": 29,
             "extraMavenRepos": [
               "https://www.jitpack.io"
             ],

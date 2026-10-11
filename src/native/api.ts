@@ -39,6 +39,9 @@ export const api = {
   setSize: async (w: number, h: number) => { if (!Native) throw new Error('Not available here.'); return Native.setSize(w, h); },
   resetSize: async () => { if (!Native) throw new Error('Not available here.'); return Native.resetSize(); },
   shell: async (cmd: string) => { if (!Native) throw new Error('The shell is only available in the installed app.'); return Native.shell(cmd); },
+  session: async (cmd: string) => { if (!Native) throw new Error('The shell is only available in the installed app.'); return Native.sessionExec(cmd); },
+  sessionReset: () => (Native ? Native.sessionReset() : false),
+  listPackages: async () => (Native ? Native.listPackages().catch(() => []) : []),
   disconnect: async () => (Native ? Native.disconnect() : false),
   restoreDefault: async () => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.restoreDefault(); },
 };

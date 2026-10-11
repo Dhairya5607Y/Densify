@@ -36,6 +36,9 @@ export interface NativeApi {
   logs(): string[];
   clearLogs(): boolean;
   previewFloating(seconds: number): boolean;
+  sessionExec(cmd: string): Promise<string>;
+  sessionReset(): boolean;
+  listPackages(): Promise<{ packageName: string; versionName: string; versionCode: number; appLabel: string; isSystem: boolean; uid: number }[]>;
   disconnect(): Promise<boolean>;
   startMonitoring(): boolean;
   stopMonitoring(): boolean;

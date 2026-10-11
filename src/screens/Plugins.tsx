@@ -12,7 +12,7 @@ import { AppSwitch, Btn, Group, Icon, Row, Section, Surface, T } from '../ui/pri
 import { useToast } from '../ui/overlays';
 import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
-import { Header } from './common';
+import { Header, SearchBar } from './common';
 
 const EXAMPLE = JSON.stringify({
   id: 'fast-animations', name: 'Fast animations', version: '1.0', author: 'you', desc: 'Speeds up system animations while gaming.',
@@ -40,6 +40,7 @@ export function Plugins() {
   const { state, update } = useStore();
   const t = useTheme(); const nav = useNav(); const toast = useToast(); const ensure = useEnsure();
   const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const box = { borderRadius: t.rs, borderWidth: 1.5, borderColor: t.c.bd2, color: t.c.tx, paddingHorizontal: 14, fontSize: 13, fontFamily: 'monospace' } as const;
@@ -108,9 +109,10 @@ export function Plugins() {
     <Screen>
       <Header title="Plugins" sub="Add-ons with actions, hooks and a WebUI" onBack={nav.back} right={<View style={{ flexDirection: 'row', gap: 6 }}><Btn v="tonal" label="JSON" onPress={() => setAdding(true)} /><Btn v="pri" label={busy ? step || '…' : 'Zip'} disabled={busy} onPress={pickZip} /></View>} />
       {log ? <Surface pad={12} style={{ marginBottom: 14 }}><T v="sub" c={t.c.tx2} style={{ fontFamily: 'monospace', fontSize: 12 }}>{log}</T></Surface> : null}
+      {state.plugins.length > 3 && <View style={{ marginBottom: 12 }}><SearchBar value={q} onChange={setQ} placeholder="Search plugins" /></View>}
       {state.plugins.length === 0 ? (
         <Surface pad={18}><T v="sub">No plugins installed. Tap Zip to install an AxManager or KernelSU-style module (module.prop, customize.sh, service.sh, action.sh, webroot). JSON lets you write a small plugin by hand.</T></Surface>
-      ) : state.plugins.map((p) => (
+      ) : state.plugins.filter((p) => (p.name + p.id + p.author + p.desc).toLowerCase().includes(q.trim().toLowerCase())).map((p) => (
         <View key={p.id} style={{ marginBottom: 14 }}>
           <Group>
             <Row leadIcon="extension" title={p.name} sub={`v${p.version}${p.author ? ` · ${p.author}` : ''}${p.desc ? `\n${p.desc}` : ''}`} minH={76}

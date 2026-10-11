@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { api, useAdb } from '../native/api';
+import { useStore } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
 import { useNav } from '../nav';
 import { Btn, Group, Icon, IconName, Section, Surface, T } from '../ui/primitives';
@@ -10,9 +11,12 @@ import { hexA } from '../ui/TabBar';
 import { useEnsure } from '../logic/permissions';
 import { Header } from './common';
 
+const USB = { title: 'From a computer', desc: 'For Android 10 and below, or when Wireless Debugging is unavailable.', icon: 'usb' as IconName, go: 'Show the command',
+  steps: ['Turn on USB debugging in Developer options', 'Connect the phone to a computer with adb installed', 'Run: adb tcpip 5555', 'Allow the debugging prompt on the phone and tick Always allow', 'Unplug the cable, then tap Check connection below. Repeat after each restart'] };
 const METHODS: Record<string, { title: string; desc: string; icon: IconName; go: string; steps: string[] }> = {
   notif: { title: 'Notification Method', desc: "Use Android's Wireless Debugging notification to authorize Densify.", icon: 'notifications', go: 'Start setup',
     steps: ['Enable Developer options', 'Open Wireless Debugging', 'Turn Wireless Debugging on', 'Tap Start setup below', 'Choose “Pair device with pairing code”, then type the code into the Densify notification', 'Return to Densify and check the connection'] },
+  usb: USB,
   split: { title: 'Split-Screen Method', desc: 'Keep Densify visible while you complete the pairing steps.', icon: 'vertical-split', go: 'Start split-screen setup',
     steps: ['Open Android Settings', 'Go to Developer options', 'Open Wireless Debugging', 'Put Densify in split screen', 'Pair with the code and allow the connection', 'Return to Densify'] },
 };
@@ -24,7 +28,9 @@ const HELP = [
 
 export function Setup() {
   const t = useTheme(); const nav = useNav(); const toast = useToast(); const ensure = useEnsure(); const adb = useAdb();
-  const [method, setMethod] = useState('notif');
+  const { state, update } = useStore();
+  const [method, setMethodRaw] = useState(state.mode === 'tcpip' ? 'usb' : 'notif');
+  const setMethod = (k: string) => { setMethodRaw(k); update((x) => ({ ...x, mode: k === 'usb' ? 'tcpip' : x.mode === 'tcpip' ? 'wireless' : x.mode })); api.disconnect(); };
   const [open, setOpen] = useState<number | null>(null);
   const m = METHODS[method];
   const stat = adb.state === 'connected' ? ['Connected', t.c.ok, 'Densify can change your display density.'] : adb.state === 'connecting' ? ['Connecting…', t.c.mu, 'Talking to Android…']
@@ -37,6 +43,7 @@ export function Setup() {
     } catch (e) { toast({ title: "Couldn't connect", sub: (e as Error).message, err: true, action: { label: 'Retry', run: check } }); }
   };
   const start = async () => {
+    if (method === 'usb') { toast({ title: 'On your computer run', sub: 'adb tcpip 5555' }); return; }
     if (method === 'notif') { if (!(await ensure('quickNotif'))) return; api.startPairing(); toast({ title: 'Pairing started', sub: 'Open Wireless Debugging, tap “Pair device with pairing code”, then use the notification.' }); api.openSettings('developer'); }
     else { api.openSettings('developer'); toast({ title: 'Split-screen ready', sub: 'Keep Densify on top while Settings opens below.' }); }
   };
@@ -75,7 +82,7 @@ export function Setup() {
         <T v="sub" style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 10 }}>Android doesn't let apps switch Wireless Debugging on for you, so this is a one-time manual setup.</T>
       </Surface>
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-        <View style={{ flex: 1 }}><Btn wide v="tonal" label="Open Wireless Debugging" onPress={() => api.openSettings('developer')} /></View>
+        <View style={{ flex: 1 }}><Btn wide v="tonal" label="Open Developer options" onPress={() => api.openSettings('developer')} /></View>
         <View style={{ flex: 1 }}><Btn wide v="tonal" label={m.go} onPress={start} /></View>
       </View>
 

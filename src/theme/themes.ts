@@ -31,3 +31,16 @@ export const THEMES: Theme[] = [
 ];
 
 export const themeById = (id: string) => THEMES.find((t) => t.id === id) ?? THEMES[0];
+
+const lum = (hex: string) => {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const f = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+};
+/** Replaces a theme's accent with the user's colour, keeping text on it readable. */
+export function withAccent(t: Theme, hex: string): Theme {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const acs = `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${t.dark ? 0.16 : 0.12})`;
+  return { ...t, c: { ...t.c, ac: hex, acs, on: lum(hex) > 0.4 ? '#0a0a0a' : '#ffffff' } };
+}
+export const ACCENTS = ['#5cbdff', '#7c9cff', '#b28cff', '#ff7ab8', '#ff6b6b', '#ff9a4d', '#ffd24d', '#8be15c', '#3ef0d0', '#a9b8cc', '#e11d2e', '#0a0a0a'];

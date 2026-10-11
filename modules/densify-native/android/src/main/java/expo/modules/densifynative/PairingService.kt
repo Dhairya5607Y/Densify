@@ -20,9 +20,8 @@ class PairingService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     Hub.init(this)
-    startForeground(Notifs.ID_PAIRING,
-      Notifs.builder(this).setContentTitle("Looking for pairing port…").setContentText("In Wireless Debugging, tap “Pair device with pairing code”.").setOngoing(true).build(),
-      ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+    val n = Notifs.builder(this).setContentTitle("Looking for pairing port…").setContentText("In Wireless Debugging, tap “Pair device with pairing code”.").setOngoing(true).build()
+    if (android.os.Build.VERSION.SDK_INT >= 34) startForeground(Notifs.ID_PAIRING, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(Notifs.ID_PAIRING, n)
     nsd = getSystemService(NsdManager::class.java)
     discover()
     return START_NOT_STICKY
