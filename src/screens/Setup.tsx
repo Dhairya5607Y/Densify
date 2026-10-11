@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { api, useAdb } from '../native/api';
 import { useStore } from '../store/store';
@@ -23,7 +23,7 @@ const METHODS: Record<string, { title: string; desc: string; icon: IconName; go:
 const HELP = [
   ["Why can't Densify enable this itself?", 'Wireless Debugging is a protected developer setting. Android requires you to turn it on and approve the pairing once.'],
   ['It disconnects after a restart', 'Android often turns Wireless Debugging off on reboot or when Wi-Fi changes. After setup, Densify grants itself the permission to switch it back on.'],
-  ['What does Densify run?', 'Only commands that read and set your display density and the game settings you turn on. Resolution is never touched.'],
+  ['What does Densify run?', 'Only commands that read and set your display density and the game settings you turn on. Screen size is only changed when you use Stretch resolution.'],
 ];
 
 export function Setup() {
@@ -31,6 +31,7 @@ export function Setup() {
   const { state, update } = useStore();
   const [method, setMethodRaw] = useState(state.mode === 'tcpip' ? 'usb' : 'notif');
   const setMethod = (k: string) => { setMethodRaw(k); update((x) => ({ ...x, mode: k === 'usb' ? 'tcpip' : x.mode === 'tcpip' ? 'wireless' : x.mode })); api.disconnect(); };
+  useEffect(() => { if (api.sdkInt() < 30 && state.mode !== 'tcpip') setMethod('usb'); }, []); // Android 10 and below has no Wireless Debugging
   const [open, setOpen] = useState<number | null>(null);
   const m = METHODS[method];
   const stat = adb.state === 'connected' ? ['Connected', t.c.ok, 'Densify can change your display density.'] : adb.state === 'connecting' ? ['Connecting…', t.c.mu, 'Talking to Android…']

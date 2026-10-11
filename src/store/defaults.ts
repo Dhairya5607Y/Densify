@@ -1,6 +1,6 @@
 import type { AppState, Bundle } from './types';
 
-export const NO_STRETCH = { on: false, mode: 'ratio', ratio: '4:3', w: 0, h: 0 } as const;
+export const NO_STRETCH = { on: false, w: 0, h: 0 } as const;
 
 export const NO_BUNDLE: Bundle = { hz: false, perf: false, dnd: false, rot: false, guard: false, bright: false, awake: false };
 

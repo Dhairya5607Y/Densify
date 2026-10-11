@@ -12,6 +12,7 @@ import { Screen } from '../ui/scroll';
 import { hexA } from '../ui/TabBar';
 import { BUNDLE_ITEMS } from '../logic/features';
 import { useEnsure } from '../logic/permissions';
+import { formatSize, parseSize } from '../logic/size';
 import { parseDpi, SLIDER_MAX, SLIDER_MIN } from '../logic/dpi';
 import { Header } from './common';
 
@@ -35,6 +36,14 @@ export function Profile({ pkg, label }: { pkg: string; label: string }) {
   const sx = d.stretch ?? NO_STRETCH;
   const setSx = (p: Partial<typeof sx>) => setD((x) => ({ ...x, stretch: { ...(x.stretch ?? NO_STRETCH), ...p } }));
   const toggleStretch = async (v: boolean) => { if (v && !(await ensure('stretch'))) return; setSx({ on: v }); };
+  const [sizeText, setSizeText] = useState(formatSize(sx.w, sx.h));
+  const [sizeErr, setSizeErr] = useState('');
+  const onSize = (v: string) => {
+    const clean = v.replace(/[^0-9*xX×,:\s]/g, '').slice(0, 12); setSizeText(clean);
+    if (!clean.trim()) { setSizeErr(''); setSx({ w: 0, h: 0 }); return; }
+    const r = parseSize(clean);
+    if (r.err !== undefined) setSizeErr(r.err); else { setSizeErr(''); setSx({ w: r.w, h: r.h }); }
+  };
   const eff: Bundle = d.presetId === 'custom' ? d.bundle : state.presets.find((p) => p.id === d.presetId)?.bundle ?? d.bundle;
   const dirty = JSON.stringify(d) !== JSON.stringify(existing ?? null);
   const setDpi = (v: number) => { setD((x) => ({ ...x, dpi: v })); setText(String(v)); setErr(''); };
@@ -118,28 +127,18 @@ export function Profile({ pkg, label }: { pkg: string; label: string }) {
       </View>
       <Group>{BUNDLE_ITEMS.map(rowFor)}</Group>
 
-      <Section title="Stretch screen" />
+      <Section title="Stretch resolution" />
       <Group>
-        <Row leadIcon="aspect-ratio" title="Stretch when it launches" sub={`Changes the screen shape while ${d.name} is open, then restores it`} right={<AppSwitch on={sx.on} onChange={toggleStretch} />} />
+        <Row leadIcon="aspect-ratio" title="Stretch when it launches" sub={`Changes the screen resolution while ${d.name} is open, then restores it`} right={<AppSwitch on={sx.on} onChange={toggleStretch} />} />
       </Group>
       {sx.on && (
         <Surface pad={14} style={{ marginTop: 10 }}>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-            <Chip h={40} label="Ratio" on={sx.mode === 'ratio'} onPress={() => setSx({ mode: 'ratio' })} />
-            <Chip h={40} label="Exact size" on={sx.mode === 'custom'} onPress={() => setSx({ mode: 'custom' })} />
+          <T v="sub" style={{ marginBottom: 8 }}>Size for this game, as width*height. Leave empty to use your Stretch resolution from Home.</T>
+          <View style={{ height: 46, borderRadius: t.rs, borderWidth: 1.5, borderColor: sizeErr ? t.c.wn : t.c.bd2, justifyContent: 'center', paddingHorizontal: 14 }}>
+            <TextInput value={sizeText} placeholder={formatSize(api.getStretch().w, api.getStretch().h) || '2160*1080'} placeholderTextColor={t.c.mu} keyboardType="numbers-and-punctuation" autoCorrect={false} onChangeText={onSize}
+              style={{ color: t.c.tx, fontSize: 17, fontFamily: t.mono ? 'monospace' : undefined }} />
           </View>
-          {sx.mode === 'ratio' ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {['4:3', '5:4', '16:10', '3:2', '1:1'].map((r) => <Chip key={r} h={40} label={r} on={sx.ratio === r} onPress={() => setSx({ ratio: r })} />)}
-            </View>
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <TextInput value={sx.w ? String(sx.w) : ''} placeholder="Width" placeholderTextColor={t.c.mu} keyboardType="number-pad" onChangeText={(v) => setSx({ w: Number(v.replace(/\D/g, '').slice(0, 4)) })} style={{ flex: 1, height: 46, borderRadius: t.rs, borderWidth: 1.5, borderColor: t.c.bd2, color: t.c.tx, paddingHorizontal: 14, fontSize: 16 }} />
-              <T v="sub">×</T>
-              <TextInput value={sx.h ? String(sx.h) : ''} placeholder="Height" placeholderTextColor={t.c.mu} keyboardType="number-pad" onChangeText={(v) => setSx({ h: Number(v.replace(/\D/g, '').slice(0, 4)) })} style={{ flex: 1, height: 46, borderRadius: t.rs, borderWidth: 1.5, borderColor: t.c.bd2, color: t.c.tx, paddingHorizontal: 14, fontSize: 16 }} />
-            </View>
-          )}
-          <T v="sub" style={{ marginTop: 10 }}>Only the screen shape changes, with black bars where needed. If anything looks wrong, Restore in the notification or floating panel resets it.</T>
+          <T v="sub" c={sizeErr ? t.c.wn : t.c.mu} style={{ marginTop: 8 }}>{sizeErr || 'Only the screen size changes. Restore in the notification or floating panel resets it.'}</T>
         </Surface>
       )}
 

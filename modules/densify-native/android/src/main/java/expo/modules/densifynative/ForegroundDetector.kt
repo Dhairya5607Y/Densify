@@ -21,7 +21,9 @@ class ForegroundDetector(private val ctx: Context) {
 
   fun hasAccess(): Boolean {
     val ops = ctx.getSystemService(AppOpsManager::class.java)
-    return ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName) == AppOpsManager.MODE_ALLOWED
+    val mode = if (android.os.Build.VERSION.SDK_INT >= 29) ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName)
+    else @Suppress("DEPRECATION") ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName)
+    return mode == AppOpsManager.MODE_ALLOWED
   }
 
   fun poll(): String? {

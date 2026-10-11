@@ -1,7 +1,8 @@
 export type Bundle = { hz: boolean; perf: boolean; dnd: boolean; rot: boolean; guard: boolean; bright: boolean; awake: boolean };
 export type BundleKey = keyof Bundle;
 export type Preset = { id: string; name: string; bundle: Bundle };
-export type Stretch = { on: boolean; mode: 'ratio' | 'custom'; ratio: string; w: number; h: number };
+/** Per-game stretch. w/h of 0 means "use the global stretch resolution". */
+export type Stretch = { on: boolean; w: number; h: number };
 export type Script = { id: string; name: string; code: string; trigger: 'start' | 'exit' | 'boot'; pkg: string; on: boolean };
 export type PluginAction = { id: string; name: string; code: string };
 export type PluginHook = { trigger: 'start' | 'exit' | 'boot'; code: string; pkg?: string };

@@ -35,6 +35,7 @@ class DensifyNativeModule : Module() {
       try { promise.resolve(block()) } catch (t: Throwable) { promise.reject("E_DENSIFY", t.message ?: "Unknown error", t) }
     }
   }
+  private fun startSvc(c: Context, i: Intent) { if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i) }
   private fun <T> Result<T>.orThrow(): T = getOrElse { throw IllegalStateException(it.message ?: "Failed") }
 
   override fun definition() = ModuleDefinition {
@@ -58,10 +59,11 @@ class DensifyNativeModule : Module() {
     Function("hasNotifications") {
       Build.VERSION.SDK_INT < 33 || ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
-    Function("isBatteryUnrestricted") { ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName) }
+    Function("isBatteryUnrestricted") { Build.VERSION.SDK_INT < 23 || (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName) }
     Function("hasSecureSettings") { ctx.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED }
     Function("nativeLibDir") { ctx.applicationInfo.nativeLibraryDir }
-    Function("hasOverlay") { Settings.canDrawOverlays(ctx) }
+    Function("hasOverlay") { Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(ctx) }
+    Function("sdkInt") { Build.VERSION.SDK_INT }
     Function("adbConnected") { Hub.adb.isConnected }
     Function("isMonitoring") { Hub.engine.state.value.running }
     Function("battery") { val b = batteryInfo(ctx); mapOf("level" to b.level, "charging" to b.charging, "tempC" to b.tempC.toDouble()) }
@@ -69,9 +71,9 @@ class DensifyNativeModule : Module() {
       val i = when (kind) {
         "usage" -> Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         "developer" -> Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-        "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))
-        "battery" -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
-        "notifications" -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+        "overlay" -> if (Build.VERSION.SDK_INT >= 23) Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")) else Intent(Settings.ACTION_SETTINGS)
+        "battery" -> if (Build.VERSION.SDK_INT >= 23) Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")) else Intent(Settings.ACTION_SETTINGS)
+        "notifications" -> if (Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName) else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
         else -> Intent(Settings.ACTION_SETTINGS)
       }
       i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -112,7 +114,7 @@ class DensifyNativeModule : Module() {
     }
 
     // ---- wireless debugging ----
-    Function("startPairing") { ctx.startForegroundService(Intent(ctx, PairingService::class.java)); true }
+    Function("startPairing") { startSvc(ctx, Intent(ctx, PairingService::class.java)); true }
     AsyncFunction("connect") { promise: Promise -> run(promise) { Hub.adb.connect().orThrow(); true } }
     AsyncFunction("grantSelf") { promise: Promise -> run(promise) { Hub.adb.grantSelf().orThrow(); true } }
     AsyncFunction("capabilities") { promise: Promise ->
@@ -134,6 +136,16 @@ class DensifyNativeModule : Module() {
     AsyncFunction("setSize") { w: Int, h: Int, promise: Promise -> run(promise) { Hub.adb.setSize(w, h).orThrow(); true } }
     AsyncFunction("resetSize") { promise: Promise -> run(promise) { Hub.adb.resetSize().orThrow(); true } }
 
+    // The one global "stretch resolution" (width x height). Shared by the Home card, the floating panel and per-game stretch.
+    Function("getStretch") { val (w, h) = Hub.engine.globalSize(); mapOf("w" to w, "h" to h, "on" to Hub.engine.state.value.stretched) }
+    Function("saveStretch") { w: Int, h: Int ->
+      if (w in 320..4096 && h in 320..4096) { Hub.prefs.edit().putInt("stretchW", w).putInt("stretchH", h).apply(); true } else false
+    }
+    AsyncFunction("applyStretch") { w: Int, h: Int, promise: Promise ->
+      run(promise) { if (!Hub.engine.stretchNow(w, h)) throw IllegalStateException("The system did not accept ${w}x$h. Try a size closer to your screen's own."); true }
+    }
+    AsyncFunction("resetStretch") { promise: Promise -> run(promise) { Hub.engine.unstretch(); true } }
+
     // ---- shell, logs, floating preview ----
     AsyncFunction("shell") { cmd: String, promise: Promise ->
       run(promise) { Hub.log("$ " + cmd.take(80)); Hub.adb.exec(cmd).orThrow() }
@@ -154,7 +166,7 @@ class DensifyNativeModule : Module() {
           mapOf(
             "packageName" to pi.packageName,
             "versionName" to (pi.versionName ?: ""),
-            "versionCode" to pi.longVersionCode.toDouble(),
+            "versionCode" to (if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode.toDouble() else @Suppress("DEPRECATION") pi.versionCode.toDouble()),
             "appLabel" to (ai?.let { pm.getApplicationLabel(it).toString() } ?: pi.packageName),
             "isSystem" to (ai != null && (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0),
             "uid" to (ai?.uid ?: -1),

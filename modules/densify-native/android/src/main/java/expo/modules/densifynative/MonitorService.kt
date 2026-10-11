@@ -77,8 +77,9 @@ class MonitorService : Service() {
         val wanted = forced || c.floating == "always" || (c.floating == "gaming" && s.activePkg != null)
         val dismissed = panel.dismissedKey
         if (dismissed != null && dismissed != key) panel.dismissedKey = null
-        if (wanted && Settings.canDrawOverlays(this@MonitorService) && (forced || panel.dismissedKey != key)) panel.show() else panel.hide()
-        delay(1_500)
+        val canDraw = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this@MonitorService)
+        if (wanted && canDraw && (forced || panel.dismissedKey != key)) panel.show(startOpen = forced) else panel.hide()
+        delay(if (forced) 500 else 1_500)
       }
     }
   }
@@ -129,7 +130,7 @@ class MonitorService : Service() {
     const val ACTION_UP = "expo.modules.densifynative.UP"
     const val ACTION_DOWN = "expo.modules.densifynative.DOWN"
     const val ACTION_STOP = "expo.modules.densifynative.STOP"
-    fun start(ctx: Context) { ctx.startForegroundService(Intent(ctx, MonitorService::class.java)) }
+    fun start(ctx: Context) { val i = Intent(ctx, MonitorService::class.java); if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i) }
     fun stop(ctx: Context) { ctx.startService(Intent(ctx, MonitorService::class.java).setAction(ACTION_STOP)) }
   }
 }

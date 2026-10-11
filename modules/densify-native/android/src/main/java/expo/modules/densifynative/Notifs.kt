@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.os.Build
 
 object Notifs {
   const val CHANNEL = "densify"
@@ -15,6 +16,7 @@ object Notifs {
   const val ID_BATTERY = 3
 
   fun ensure(ctx: Context) {
+    if (Build.VERSION.SDK_INT < 26) return
     val nm = ctx.getSystemService(NotificationManager::class.java)
     if (nm.getNotificationChannel(CHANNEL) == null)
       nm.createNotificationChannel(NotificationChannel(CHANNEL, "Densify", NotificationManager.IMPORTANCE_LOW))
@@ -22,7 +24,9 @@ object Notifs {
 
   fun builder(ctx: Context): Notification.Builder {
     ensure(ctx)
-    return Notification.Builder(ctx, CHANNEL).setSmallIcon(android.R.drawable.ic_menu_manage)
+    @Suppress("DEPRECATION")
+    val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(ctx, CHANNEL) else Notification.Builder(ctx).setPriority(Notification.PRIORITY_LOW)
+    return b.setSmallIcon(android.R.drawable.ic_menu_manage)
   }
 
   fun post(ctx: Context, id: Int, title: String, text: String) {

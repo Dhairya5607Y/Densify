@@ -32,6 +32,11 @@ export interface NativeApi {
   readSize(): Promise<{ physW: number; physH: number; override: string | null }>;
   setSize(w: number, h: number): Promise<boolean>;
   resetSize(): Promise<boolean>;
+  getStretch(): { w: number; h: number; on: boolean };
+  saveStretch(w: number, h: number): boolean;
+  applyStretch(w: number, h: number): Promise<boolean>;
+  resetStretch(): Promise<boolean>;
+  sdkInt(): number;
   shell(cmd: string): Promise<string>;
   logs(): string[];
   clearLogs(): boolean;

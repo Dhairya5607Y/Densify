@@ -18,7 +18,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 data class BundleCfg(val hz: Boolean, val perf: Boolean, val dnd: Boolean, val rot: Boolean, val guard: Boolean, val bright: Boolean, val awake: Boolean)
-data class StretchCfg(val on: Boolean = false, val mode: String = "ratio", val ratio: String = "4:3", val w: Int = 0, val h: Int = 0)
+/** Stretch for a game. w/h of 0 means "use the global stretch resolution". */
+data class StretchCfg(val on: Boolean = false, val w: Int = 0, val h: Int = 0)
 data class Profile(val pkg: String, val name: String, val dpi: Int, val auto: Boolean, val restore: Boolean, val bundle: BundleCfg, val stretch: StretchCfg = StretchCfg())
 data class ScriptCfg(val name: String, val code: String, val trigger: String, val pkg: String, val on: Boolean)
 data class Cfg(
@@ -49,7 +50,7 @@ data class Cfg(
             val s = p.optJSONObject("stretch")
             Profile(p.getString("pkg"), p.getString("name"), p.getInt("dpi"), p.optBoolean("auto", true), p.optBoolean("restore", true),
               BundleCfg(b.optBoolean("hz"), b.optBoolean("perf"), b.optBoolean("dnd"), b.optBoolean("rot"), b.optBoolean("guard"), b.optBoolean("bright"), b.optBoolean("awake")),
-              if (s == null) StretchCfg() else StretchCfg(s.optBoolean("on"), s.optString("mode", "ratio"), s.optString("ratio", "4:3"), s.optInt("w", 0), s.optInt("h", 0)))
+              if (s == null) StretchCfg() else StretchCfg(s.optBoolean("on"), s.optInt("w", 0), s.optInt("h", 0)))
           }.getOrNull()
         },
         (0 until (sc?.length() ?: 0)).mapNotNull { i ->
@@ -72,26 +73,21 @@ data class EngineState(
   val errHint: String? = null,
 )
 
-/** Works out the screen size for a stretch profile, in the same orientation as the panel's natural size. */
-fun stretchTarget(s: ScreenSize, st: StretchCfg): Pair<Int, Int>? {
-  if (st.mode == "custom") {
-    return if (st.w in 320..4096 && st.h in 320..4096) Pair(st.w, st.h) else null
-  }
-  val parts = st.ratio.split(":")
-  val a = parts.getOrNull(0)?.trim()?.toDoubleOrNull() ?: return null
-  val b = parts.getOrNull(1)?.trim()?.toDoubleOrNull() ?: return null
-  if (a <= 0.0 || b <= 0.0) return null
-  val ratio = maxOf(a, b) / minOf(a, b)
-  val short = minOf(s.physW, s.physH)
-  val long = maxOf(s.physW, s.physH)
-  var ns: Int
-  var nl: Int
-  if (short * ratio <= long) { ns = short; nl = (short * ratio).roundToInt() }
-  else { nl = long; ns = (long / ratio).roundToInt() }
-  ns = (ns / 2) * 2
-  nl = (nl / 2) * 2
-  if (ns < 320 || nl < 320) return null
-  return if (s.physW < s.physH) Pair(ns, nl) else Pair(nl, ns)
+/** Parses "2160*1080", "2160x1080", "2160 × 1080" or "2160,1080" into a width/height pair, or null when invalid. */
+fun parseSize(text: String): Pair<Int, Int>? {
+  val m = Regex("^\\s*(\\d{3,4})\\s*[*xX×,:\\s]\\s*(\\d{3,4})\\s*$").find(text) ?: return null
+  val w = m.groupValues[1].toInt(); val h = m.groupValues[2].toInt()
+  return if (w in 320..4096 && h in 320..4096) Pair(w, h) else null
+}
+
+/**
+ * The size to apply, given as plain width x height. Android wants it in the panel's natural orientation,
+ * so if the numbers were typed the other way round for this device they are swapped.
+ */
+fun stretchTarget(s: ScreenSize, w: Int, h: Int): Pair<Int, Int>? {
+  if (w !in 320..4096 || h !in 320..4096) return null
+  val portrait = s.physW < s.physH
+  return if ((w < h) == portrait || w == h) Pair(w, h) else Pair(h, w)
 }
 
 /**
@@ -208,23 +204,44 @@ class Engine(private val app: Context) {
 
   /** Floating-panel action: stretch on/off for the game that is open right now. */
   suspend fun toggleStretch(): Boolean {
-    val a = active ?: return false
-    if (!a.stretch.on) return false
-    return if (_state.value.stretched) { restoreSizeOnly(); false } else applyStretch(a.stretch)
+    if (_state.value.stretched) { restoreSizeOnly(); return false }
+    val st = active?.stretch
+    val (w, h) = if (st != null && st.on && st.w > 0 && st.h > 0) Pair(st.w, st.h) else globalSize()
+    return stretchNow(w, h)
+  }
+
+  fun globalSize(): Pair<Int, Int> = Pair(Hub.prefs.getInt("stretchW", 0), Hub.prefs.getInt("stretchH", 0))
+
+  /** Applies a screen size right now (from the app, the floating panel or a broadcast) and remembers it as the global size. */
+  suspend fun stretchNow(w: Int, h: Int): Boolean {
+    if (w !in 320..4096 || h !in 320..4096) { Hub.log("Stretch skipped: ${w}x$h is out of range"); return false }
+    Hub.prefs.edit().putInt("stretchW", w).putInt("stretchH", h).apply()
+    return applyStretch(w, h)
+  }
+
+  /** Puts the screen size back to what it was before stretching (or to the system default). */
+  suspend fun unstretch() {
+    val snap = readSnap()
+    if (snap.has("size")) restoreSizeOnly() else { Hub.adb.resetSize(); _state.update { it.copy(stretched = false) } }
   }
 
   private fun readSnap(): JSONObject = JSONObject(Hub.prefs.getString("snap", "{}") ?: "{}")
   private fun writeSnap(s: JSONObject) { Hub.prefs.edit().putString("snap", s.toString()).apply() }
 
   private suspend fun applyStretch(st: StretchCfg): Boolean {
+    val (gw, gh) = globalSize()
+    return applyStretch(if (st.w > 0 && st.h > 0) st.w else gw, if (st.w > 0 && st.h > 0) st.h else gh)
+  }
+
+  private suspend fun applyStretch(w: Int, h: Int): Boolean {
     val cur = Hub.adb.readSize().getOrNull() ?: return false
-    val snap = readSnap()
-    if (!snap.has("size")) { snap.put("size", cur.overrideText ?: "reset"); writeSnap(snap) }
-    val target = stretchTarget(cur, st)
+    val target = stretchTarget(cur, w, h)
     if (target == null) {
-      Hub.log("Stretch skipped: invalid target")
+      Hub.log("Stretch skipped: no valid resolution set")
       return false
     }
+    val snap = readSnap()
+    if (!snap.has("size")) { snap.put("size", cur.overrideText ?: "reset"); writeSnap(snap) }
     val r = Hub.adb.setSize(target.first, target.second)
     if (r.isSuccess) _state.update { it.copy(stretched = true) }
     else Hub.log("Stretch failed: ${r.exceptionOrNull()?.message}")

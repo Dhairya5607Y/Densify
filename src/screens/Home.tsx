@@ -10,6 +10,7 @@ import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
 import { ago, useBattery } from '../logic/hooks';
 import { AddGameSheet, Header } from './common';
+import { StretchCard } from './StretchCard';
 
 const Banner = ({ icon, title, sub, action, onAction }: { icon: 'link' | 'battery-alert' | 'tune'; title: string; sub: string; action?: string; onAction?: () => void }) => {
   const t = useTheme();
@@ -65,6 +66,8 @@ export function Home() {
           <Btn v="text" label="Restore default" disabled={!connected || !state.defaultDpi || shown === state.defaultDpi} onPress={restore} />
         </View>
       </Surface>
+
+      <StretchCard />
 
       {!connected && <Banner icon="link" title="Wireless Debugging isn't connected" sub="Densify can't change DPI until it is." action="Set up" onAction={() => nav.push({ name: 'setup' })} />}
       {connected && !state.defaultDpi && <Banner icon="tune" title="Set your default DPI" sub="Densify returns to this value after every game." action="Detect" onAction={detect} />}

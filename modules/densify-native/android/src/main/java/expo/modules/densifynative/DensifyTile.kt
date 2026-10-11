@@ -22,7 +22,8 @@ class DensifyTile : TileService() {
     val t = qsTile ?: return
     t.state = if (Hub.adb.isConnected) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
     t.label = "Density"
-    t.subtitle = dpi?.let { "$it DPI" } ?: Hub.engine.state.value.appliedDpi?.let { "$it DPI" } ?: "Tap to change"
+    val sub = dpi?.let { "$it DPI" } ?: Hub.engine.state.value.appliedDpi?.let { "$it DPI" } ?: "Tap to change"
+    if (android.os.Build.VERSION.SDK_INT >= 29) t.subtitle = sub
     t.updateTile()
   }
 }

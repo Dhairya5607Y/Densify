@@ -21,7 +21,7 @@ function toEngine(s: AppState) {
       ...s.scripts.map((x) => ({ name: x.name, code: x.code, trigger: x.trigger, pkg: x.pkg, on: x.on })),
       ...s.plugins.filter((p) => p.on).flatMap((p) => [...bootHooks(p), ...p.hooks].map((h) => ({ name: p.name, code: h.code, trigger: h.trigger, pkg: h.pkg ?? '', on: true }))),
     ],
-    profiles: s.profiles.map((p) => ({ pkg: p.pkg, name: p.name, dpi: p.dpi, auto: p.auto, restore: p.restore, bundle: resolveBundle(s, p), stretch: p.stretch ?? NO_STRETCH })),
+    profiles: s.profiles.map((p) => ({ pkg: p.pkg, name: p.name, dpi: p.dpi, auto: p.auto, restore: p.restore, bundle: resolveBundle(s, p), stretch: { on: !!p.stretch?.on, w: p.stretch?.w ?? 0, h: p.stretch?.h ?? 0 } })),
   };
 }
 
@@ -31,6 +31,7 @@ function load(): AppState {
     if (!raw) return DEFAULT_STATE;
     const o = JSON.parse(raw);
     if (o.themeId === 'glass') o.themeId = 'graphite'; // Glass was removed
+    if (Array.isArray(o.profiles)) o.profiles = o.profiles.map((p: { stretch?: { on?: boolean; w?: number; h?: number } }) => (p.stretch ? { ...p, stretch: { on: !!p.stretch.on, w: p.stretch.w ?? 0, h: p.stretch.h ?? 0 } } : p)); // old ratio-based stretch is dropped
     return { ...DEFAULT_STATE, ...o, flags: { ...DEFAULT_STATE.flags, ...(o.flags ?? {}) } };
   } catch {
     return DEFAULT_STATE; // corrupted storage: start clean instead of crashing
