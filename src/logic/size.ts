@@ -14,3 +14,17 @@ export function parseSize(text: string): SizeResult {
 }
 
 export const formatSize = (w: number, h: number) => (w > 0 && h > 0 ? `${w}*${h}` : '');
+
+/** Ready-made sizes for common shapes, worked out from this phone's own screen, in the phone's natural orientation. */
+export function quickSizes(physW: number, physH: number): { label: string; w: number; h: number }[] {
+  const short = Math.min(physW, physH); const long = Math.max(physW, physH);
+  const even = (n: number) => Math.round(n / 2) * 2;
+  const out: { label: string; w: number; h: number }[] = [];
+  for (const [label, a, b] of [['4:3', 4, 3], ['5:4', 5, 4], ['16:10', 16, 10], ['3:2', 3, 2], ['1:1', 1, 1]] as const) {
+    const r = a / b;
+    const [s, l] = short * r <= long ? [short, even(short * r)] : [even(long / r), long];
+    if (s < SIZE_MIN || l < SIZE_MIN || (s === short && l === long)) continue;
+    out.push(physW < physH ? { label, w: s, h: l } : { label, w: l, h: s });
+  }
+  return out;
+}

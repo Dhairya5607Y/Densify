@@ -3,10 +3,10 @@ import { TextInput, View } from 'react-native';
 import { api, useAdb } from '../native/api';
 import { useStore } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
-import { Btn, Surface, T } from '../ui/primitives';
+import { Btn, Chip, Surface, T } from '../ui/primitives';
 import { useToast } from '../ui/overlays';
 import { useEnsure } from '../logic/permissions';
-import { formatSize, parseSize } from '../logic/size';
+import { formatSize, parseSize, quickSizes } from '../logic/size';
 
 /** Stretch resolution, front and centre: type width*height, apply it now, reset it any time. */
 export function StretchCard() {
@@ -15,10 +15,11 @@ export function StretchCard() {
   const connected = adb.state === 'connected';
   const [text, setText] = useState(() => { const s = api.getStretch(); return formatSize(s.w, s.h); });
   const [now, setNow] = useState('');
+  const [quick, setQuick] = useState<{ label: string; w: number; h: number }[]>([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const refresh = () => api.readSize().then((z) => setNow(z.override ? `${z.override.replace('x', '*')} (screen is ${z.physW}*${z.physH})` : `${z.physW}*${z.physH} (normal)`)).catch(() => setNow(''));
+  const refresh = () => api.readSize().then((z) => { setQuick(quickSizes(z.physW, z.physH)); return z; }).then((z) => setNow(z.override ? `${z.override.replace('x', '*')} (screen is ${z.physW}*${z.physH})` : `${z.physW}*${z.physH} (normal)`)).catch(() => setNow(''));
   useEffect(() => { if (connected) refresh(); }, [connected]);
 
   const apply = async () => {
@@ -51,6 +52,11 @@ export function StretchCard() {
         <Btn v="pri" label="Stretch" disabled={!connected || busy} onPress={apply} />
         <Btn v="text" label="Reset" disabled={!connected || busy} onPress={reset} />
       </View>
+      {quick.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {quick.map((q) => <Chip key={q.label} h={38} label={`${q.label}  ${q.w}*${q.h}`} on={text.replace(/\s/g, '') === `${q.w}*${q.h}`} onPress={() => { setText(`${q.w}*${q.h}`); setErr(''); api.saveStretch(q.w, q.h); }} />)}
+        </View>
+      )}
       <T v="sub" c={err ? t.c.wn : t.c.mu} style={{ marginTop: 8, minHeight: 18 }}>{err || 'Also in the floating panel. Games can use it automatically from their profile. Restore always resets it.'}</T>
     </Surface>
   );
