@@ -99,8 +99,13 @@ class AdbHub(private val ctx: Context) {
       _state.value = AdbState("connecting")
       try {
         if (tcpip) {
-          if (mgr.connect("127.0.0.1", 5555)) { _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port 5555)"); return@withContext Result.success(Unit) }
-          return@withContext fail("Couldn't reach adb on port 5555. On your computer run: adb tcpip 5555")
+          // Any port works: the one set in Setup first, then the usual ones.
+          val want = Hub.prefs.getString("tcpPort", null)?.trim()?.toIntOrNull()?.takeIf { it in 1024..65535 } ?: 5555
+          for (port in listOf(want, 5555, 5556, 5557).distinct()) {
+            val ok = runCatching { mgr.connect("127.0.0.1", port) }.getOrDefault(false)
+            if (ok) { _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
+          }
+          return@withContext fail("Couldn't reach adb on port $want. On your computer run: adb tcpip $want")
         }
         if (mgr.connectTls(ctx, 6_000)) { _state.value = AdbState("connected"); Hub.log("Connected over Wireless Debugging"); Result.success(Unit) }
         else fail("Couldn't reach Wireless Debugging. Turn it on and make sure you're on Wi-Fi.")

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, TextInput, View } from 'react-native';
 import { api, useAdb } from '../native/api';
 import { useStore } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
@@ -12,7 +12,7 @@ import { useEnsure } from '../logic/permissions';
 import { Header } from './common';
 
 const USB = { title: 'From a computer', desc: 'For Android 10 and below, or when Wireless Debugging is unavailable.', icon: 'usb' as IconName, go: 'Show the command',
-  steps: ['Turn on USB debugging in Developer options', 'Connect the phone to a computer with adb installed', 'Run: adb tcpip 5555', 'Allow the debugging prompt on the phone and tick Always allow', 'Unplug the cable, then tap Check connection below. Repeat after each restart'] };
+  steps: ['Turn on USB debugging in Developer options', 'Connect the phone to a computer with adb installed', 'Run: adb tcpip PORT', 'Allow the debugging prompt on the phone and tick Always allow', 'Unplug the cable, then tap Check connection below. Repeat after each restart'] };
 const METHODS: Record<string, { title: string; desc: string; icon: IconName; go: string; steps: string[] }> = {
   notif: { title: 'Notification Method', desc: "Use Android's Wireless Debugging notification to authorize Densify.", icon: 'notifications', go: 'Start setup',
     steps: ['Enable Developer options', 'Open Wireless Debugging', 'Turn Wireless Debugging on', 'Tap Start setup below', 'Choose “Pair device with pairing code”, then type the code into the Densify notification', 'Return to Densify and check the connection'] },
@@ -32,8 +32,20 @@ export function Setup() {
   const [method, setMethodRaw] = useState(state.mode === 'tcpip' ? 'usb' : 'notif');
   const setMethod = (k: string) => { setMethodRaw(k); update((x) => ({ ...x, mode: k === 'usb' ? 'tcpip' : x.mode === 'tcpip' ? 'wireless' : x.mode })); api.disconnect(); };
   useEffect(() => { if (api.sdkInt() < 30 && state.mode !== 'tcpip') setMethod('usb'); }, []); // Android 10 and below has no Wireless Debugging
+  const pick = (k: string) => { setMethod(k); if (k !== 'usb') begin(k); };
+  const tried = useRef(false);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active' && adb.state !== 'connected' && tried.current) api.connect().then(() => api.grantSelf().catch(() => {})).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [adb.state]);
   const [open, setOpen] = useState<number | null>(null);
-  const m = METHODS[method];
+  const [port, setPort] = useState(() => api.storageGet('tcpPort') || '5555');
+  const portOk = /^\d{4,5}$/.test(port) && Number(port) >= 1024 && Number(port) <= 65535;
+  const onPort = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 5); setPort(d); if (/^\d{4,5}$/.test(d) && Number(d) >= 1024 && Number(d) <= 65535) api.storageSet('tcpPort', d); };
+  const m0 = METHODS[method];
+  const m = { ...m0, steps: m0.steps.map((x) => x.replace('PORT', portOk ? port : '5555')) };
   const stat = adb.state === 'connected' ? ['Connected', t.c.ok, 'Densify can change your display density.'] : adb.state === 'connecting' ? ['Connecting…', t.c.mu, 'Talking to Android…']
     : adb.state === 'error' ? ['Connection error', t.c.wn, adb.message || "Couldn't reach Wireless Debugging. Turn it on, stay on Wi-Fi, then retry."] : ['Not connected', t.c.mu, 'Set up Wireless Debugging to enable DPI switching.'];
 
@@ -44,8 +56,11 @@ export function Setup() {
     } catch (e) { toast({ title: "Couldn't connect", sub: (e as Error).message, err: true, action: { label: 'Retry', run: check } }); }
   };
   const start = async () => {
-    if (method === 'usb') { toast({ title: 'On your computer run', sub: 'adb tcpip 5555' }); return; }
-    if (method === 'notif') { if (!(await ensure('quickNotif'))) return; api.startPairing(); toast({ title: 'Pairing started', sub: 'Open Wireless Debugging, tap “Pair device with pairing code”, then use the notification.' }); api.openSettings('developer'); }
+    await begin(method);
+  };
+  const begin = async (k: string) => {
+    if (k === 'usb') { toast({ title: 'On your computer run', sub: `adb tcpip ${portOk ? port : '5555'}` }); return; }
+    if (k === 'notif') { if (!(await ensure('quickNotif'))) return; api.startPairing(); toast({ title: 'Pairing started', sub: 'Open Wireless Debugging, tap “Pair device with pairing code”, then use the notification.' }); api.openSettings('developer'); }
     else { api.openSettings('developer'); toast({ title: 'Split-screen ready', sub: 'Keep Densify on top while Settings opens below.' }); }
   };
 
@@ -63,7 +78,7 @@ export function Setup() {
         {Object.entries(METHODS).map(([k, v]) => {
           const on = method === k;
           return (
-            <Pressable key={k} onPress={() => setMethod(k)} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, minHeight: 78, borderRadius: Math.min(t.r, 22), borderWidth: 1.5, borderColor: on ? t.c.ac : t.c.bd, backgroundColor: on ? t.c.acs : t.c.sf }}>
+            <Pressable key={k} onPress={() => { tried.current = true; pick(k); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, minHeight: 78, borderRadius: Math.min(t.r, 22), borderWidth: 1.5, borderColor: on ? t.c.ac : t.c.bd, backgroundColor: on ? t.c.acs : t.c.sf }}>
               <View style={{ width: 42, height: 42, borderRadius: t.surface === 'hud' ? 2 : 21, backgroundColor: t.c.acs, alignItems: 'center', justifyContent: 'center' }}><Icon name={v.icon} color={on ? t.c.ac : t.c.mu} /></View>
               <View style={{ flex: 1 }}><T>{v.title}</T><T v="sub">{v.desc}</T></View>
               <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: on ? t.c.ac : t.c.mu, alignItems: 'center', justifyContent: 'center' }}>{on && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.c.ac }} />}</View>
@@ -82,9 +97,19 @@ export function Setup() {
         ))}
         <T v="sub" style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 10 }}>Android doesn't let apps switch Wireless Debugging on for you, so this is a one-time manual setup.</T>
       </Surface>
+      {method === 'usb' && (
+        <Surface pad={14} style={{ marginTop: 12 }}>
+          <T w="600" style={{ fontSize: 14.5 }}>Port</T>
+          <T v="sub" style={{ marginTop: 2 }}>Any port from 1024 to 65535. Use the same number in the adb command. Densify also tries 5555, 5556 and 5557.</T>
+          <View style={{ height: 46, borderRadius: t.rs, borderWidth: 1.5, borderColor: portOk ? t.c.bd2 : t.c.wn, justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 }}>
+            <TextInput value={port} onChangeText={onPort} keyboardType="number-pad" maxLength={5} style={{ color: t.c.tx, fontSize: 17, fontFamily: t.mono ? 'monospace' : undefined }} />
+          </View>
+          {!portOk && <T v="sub" c={t.c.wn} style={{ marginTop: 6 }}>Enter a number from 1024 to 65535.</T>}
+        </Surface>
+      )}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-        <View style={{ flex: 1 }}><Btn wide v="tonal" label="Open Developer options" onPress={() => api.openSettings('developer')} /></View>
-        <View style={{ flex: 1 }}><Btn wide v="tonal" label={m.go} onPress={start} /></View>
+        <View style={{ flex: 1 }}><Btn wide v="tonal" label="Developer options" onPress={() => api.openSettings('developer')} /></View>
+        <View style={{ flex: 1 }}><Btn wide v="tonal" label={method === 'usb' ? 'Show command' : 'Start again'} onPress={() => { tried.current = true; start(); }} /></View>
       </View>
 
       <Section title="Help" />

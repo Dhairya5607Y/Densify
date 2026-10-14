@@ -44,13 +44,15 @@ export function StretchCard() {
     <Surface pad={16} style={{ marginTop: 12 }}>
       <T w="600" style={{ fontSize: 15.5 }}>Stretch resolution</T>
       <T v="sub" style={{ marginTop: 2 }}>{now ? `Now ${now}` : 'Type a size as width*height'}</T>
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-        <View style={{ flex: 1, height: 48, borderRadius: t.rs, borderWidth: 1.5, borderColor: err ? t.c.wn : t.c.bd2, justifyContent: 'center', paddingHorizontal: 16 }}>
+      <View style={{ marginTop: 12 }}>
+        <View style={{ height: 48, borderRadius: t.rs, borderWidth: 1.5, borderColor: err ? t.c.wn : t.c.bd2, justifyContent: 'center', paddingHorizontal: 16 }}>
           <TextInput value={text} onChangeText={onText} placeholder="2160*1080" placeholderTextColor={t.c.mu} keyboardType="numbers-and-punctuation" autoCorrect={false} onSubmitEditing={apply}
             style={{ color: t.c.tx, fontSize: 18, fontWeight: '500', fontFamily: t.mono ? 'monospace' : undefined }} />
         </View>
-        <Btn v="pri" label="Stretch" disabled={!connected || busy} onPress={apply} />
-        <Btn v="text" label="Reset" disabled={!connected || busy} onPress={reset} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+        <View style={{ flex: 2 }}><Btn wide v="pri" label="Stretch" disabled={!connected || busy} onPress={apply} /></View>
+        <View style={{ flex: 1 }}><Btn wide v="tonal" label="Reset" disabled={!connected || busy} onPress={reset} /></View>
       </View>
       {quick.length > 0 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
