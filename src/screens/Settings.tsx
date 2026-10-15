@@ -79,10 +79,8 @@ export function Settings() {
 
       <Section title="Floating panel" />
       <Group>
-        <Row leadIcon="layers" title="Show over games" sub="A draggable bubble to change DPI without leaving the game" right={
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {(['off', 'gaming', 'always'] as const).map((m) => <Chip key={m} h={36} label={m === 'off' ? 'Off' : m === 'gaming' ? 'In games' : 'Always'} on={state.floating === m} onPress={() => setFloating(m)} />)}
-          </View>} />
+        <Row leadIcon="layers" title="Show over games" sub="A draggable bubble to change DPI without leaving the game" below={
+          (['off', 'gaming', 'always'] as const).map((m) => <Chip key={m} h={36} label={m === 'off' ? 'Off' : m === 'gaming' ? 'In games' : 'Always'} on={state.floating === m} onPress={() => setFloating(m)} />)} />
         <Row leadIcon="visibility" title="Preview the panel" sub="Shows it for 15 seconds so you can place it" onPress={preview} />
       </Group>
 
@@ -95,10 +93,8 @@ export function Settings() {
       <Section title="Connection" />
       <Group>
         <Row leadIcon="link" title={state.mode === 'root' ? 'Root access' : state.mode === 'tcpip' ? 'adb over network' : 'Wireless Debugging'} sub={stateLabel[0]} right={<Btn v={adb.state === 'connected' ? 'tonal' : 'pri'} label={state.mode === 'root' ? 'Connect' : 'Setup'} onPress={() => (state.mode === 'root' ? api.connect().catch((e: Error) => toast({ title: 'Root not available', sub: e.message, err: true })) : nav.push({ name: 'setup' }))} />} />
-        <Row leadIcon="admin-panel-settings" title="Connection method" sub={state.mode === 'root' ? 'Root' : state.mode === 'tcpip' ? 'From a computer (adb tcpip)' : 'Wireless Debugging (Android 11+)'} right={
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {([['wireless', 'Wi-Fi'], ['tcpip', 'PC'], ['root', 'Root']] as const).map(([m, l]) => <Chip key={m} h={36} label={l} on={state.mode === m} onPress={() => { update((x) => ({ ...x, mode: m })); api.disconnect(); }} />)}
-          </View>} />
+        <Row leadIcon="admin-panel-settings" title="Connection method" sub={state.mode === 'root' ? 'Root' : state.mode === 'tcpip' ? 'From a computer (adb tcpip)' : 'Wireless Debugging (Android 11+)'} below={
+          ([['wireless', 'Wi-Fi'], ['tcpip', 'PC'], ['root', 'Root']] as const).map(([m, l]) => <Chip key={m} h={36} label={l} on={state.mode === m} onPress={() => { update((x) => ({ ...x, mode: m })); api.disconnect(); }} />)} />
         <Row leadIcon="wifi" title="Reconnect automatically" sub="Turns Wireless Debugging back on when Wi-Fi returns" right={<AppSwitch on={state.autoReconnect} onChange={(v) => update((x) => ({ ...x, autoReconnect: v }))} />} />
       </Group>
 
@@ -143,7 +139,7 @@ export function Settings() {
       </View>
 
       <Section title="About" />
-      <Group><Row leadIcon="info" title="Densify" sub={`Version ${Constants.expoConfig?.version ?? ''} · DPI only, never resolution`} /></Group>
+      <Group><Row leadIcon="info" title="Densify" sub={`Version ${Constants.expoConfig?.version ?? ''}`} /></Group>
     </Screen>
   );
 }

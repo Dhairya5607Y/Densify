@@ -119,7 +119,7 @@ class DensifyNativeModule : Module() {
     AsyncFunction("grantSelf") { promise: Promise -> run(promise) { Hub.adb.grantSelf().orThrow(); true } }
     AsyncFunction("capabilities") { promise: Promise ->
       run(promise) {
-        val connected = Hub.adb.isConnected || Hub.adb.connect().isSuccess
+        val connected = Hub.adb.isConnected || Hub.adb.connect(quiet = true).isSuccess
         mapOf("hz" to Hub.maxHz().toInt(), "perf" to (connected && Hub.adb.perfSupported()), "guard" to false, "tile" to (Build.VERSION.SDK_INT >= 33))
       }
     }

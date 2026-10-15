@@ -68,7 +68,7 @@ export function Group({ children, style }: { children: React.ReactNode; style?: 
   return <Surface style={style}>{kids.map((k, i) => (React.isValidElement(k) && k.type === Row ? React.cloneElement(k as React.ReactElement<{ divider?: boolean }>, { divider: i > 0 }) : k))}</Surface>;
 }
 
-export function Row({ lead, leadIcon, title, sub, right, onPress, divider, disabled, minH = 64 }: { lead?: React.ReactNode; leadIcon?: IconName; title: React.ReactNode; sub?: string; right?: React.ReactNode; onPress?: () => void; divider?: boolean; disabled?: boolean; minH?: number }) {
+export function Row({ lead, leadIcon, title, sub, right, below, onPress, divider, disabled, minH = 64 }: { lead?: React.ReactNode; leadIcon?: IconName; title: React.ReactNode; sub?: string; right?: React.ReactNode; below?: React.ReactNode; onPress?: () => void; divider?: boolean; disabled?: boolean; minH?: number }) {
   const t = useTheme();
   const leading = lead ?? (leadIcon ? (
     <View style={{ width: 40, height: 40, borderRadius: t.surface === 'hud' ? 2 : 20, backgroundColor: t.c.acs, alignItems: 'center', justifyContent: 'center' }}><Icon name={leadIcon} size={21} color={t.c.ac} /></View>) : null);
@@ -76,11 +76,12 @@ export function Row({ lead, leadIcon, title, sub, right, onPress, divider, disab
     <Pressable disabled={!onPress || disabled} onPress={() => { tap(); onPress?.(); }} android_ripple={onPress ? { color: t.c.acs } : undefined}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: minH, paddingHorizontal: 16, paddingVertical: 11, opacity: disabled ? 0.5 : 1, borderTopWidth: divider ? StyleSheet.hairlineWidth : 0, borderTopColor: t.c.bd2 }}>
       {leading}
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, flexShrink: 1, minWidth: 0 }}>
         {typeof title === 'string' ? <T lines={1}>{title}</T> : title}
         {sub ? <T v="sub" style={{ marginTop: 1 }}>{sub}</T> : null}
+        {below ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>{below}</View> : null}
       </View>
-      {right}
+      {right ? <View style={{ flexShrink: 0 }}>{right}</View> : null}
     </Pressable>
   );
 }

@@ -101,6 +101,8 @@ class Engine(private val app: Context) {
   private var active: Profile? = null
   private var leftAt = 0L
   private var failedPkg: String? = null
+  private var candPkg: String? = null
+  private var candAt = 0L
   private var pendingRestore = false
   private var batteryNotified = false
   private var raw = ""
@@ -136,7 +138,7 @@ class Engine(private val app: Context) {
     if (abs(stamp - last) > 60_000) {
       Hub.prefs.edit().putLong("bootStamp", stamp).apply()
       if (config().scripts.any { it.on && it.trigger == "boot" }) {
-        if (!Hub.adb.isConnected) Hub.adb.connect()
+        if (!Hub.adb.isConnected) Hub.adb.connect(quiet = true)
         runScripts("boot", null)
       }
     }
@@ -145,13 +147,19 @@ class Engine(private val app: Context) {
   private suspend fun tick() {
     val c = config()
     val fg = Hub.detector.poll()
-    val p = if (c.automation) c.profiles.firstOrNull { it.pkg == fg && it.auto } else null
+    // Densify itself is never a game, so opening the app can never change DPI.
+    val p = if (c.automation && fg != app.packageName) c.profiles.firstOrNull { it.pkg == fg && it.auto } else null
     if (p != null) {
       leftAt = 0
       if (failedPkg == p.pkg) return
+      // A game must stay in front for a moment before DPI changes, so a brief flash of its window doesn't trigger it.
+      val nowMs = SystemClock.elapsedRealtime()
+      if (candPkg != p.pkg) { candPkg = p.pkg; candAt = nowMs }
+      if (active?.pkg != p.pkg && nowMs - candAt < 700) return
       if (active?.pkg != p.pkg || active?.dpi != p.dpi) apply(p, c)
     } else {
       failedPkg = null
+      candPkg = null
       val a = active
       if (a == null) {
         if (pendingRestore) { pendingRestore = false; restoreAll(c) }
@@ -165,7 +173,7 @@ class Engine(private val app: Context) {
   }
 
   private suspend fun apply(p: Profile, c: Cfg) {
-    Hub.log("${p.name} opened. Applying ${p.dpi} DPI${if (p.stretch.on) " and stretch" else ""}")
+    Hub.log("${p.name} (${p.pkg}) in front. Applying ${p.dpi} DPI${if (p.stretch.on) " and stretch" else ""}")
     applyBundle(p.bundle)
     if (p.stretch.on) applyStretch(p.stretch) else if (_state.value.stretched) restoreSizeOnly()
     val r = Hub.adb.setDensity(p.dpi)

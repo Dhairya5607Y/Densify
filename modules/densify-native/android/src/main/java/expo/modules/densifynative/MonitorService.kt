@@ -42,7 +42,7 @@ class MonitorService : Service() {
     val first = build("Densify is running", "Tap an action to change DPI.")
     if (Build.VERSION.SDK_INT >= 34) startForeground(Notifs.ID_MONITOR, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(Notifs.ID_MONITOR, first)
     Hub.scope.launch {
-      if (!Hub.adb.isConnected) Hub.adb.connect()
+      if (!Hub.adb.isConnected) Hub.adb.connect(quiet = true)
       Hub.engine.start()
     }
     watchWifi()
@@ -94,7 +94,7 @@ class MonitorService : Service() {
         Hub.scope.launch {
           delay(1_500)
           runCatching { Settings.Global.putInt(contentResolver, "adb_wifi_enabled", 1) }
-          if (!Hub.adb.isConnected) Hub.adb.connect()
+          if (!Hub.adb.isConnected) Hub.adb.connect(quiet = true)
         }
       }
     }

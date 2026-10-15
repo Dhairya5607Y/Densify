@@ -23,7 +23,7 @@ export function Screen({ children, tab, footer, scroll = true }: { children: Rea
   if (!scroll) return <View style={{ flex: 1, paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: insets.bottom + 12 }}>{children}</View>;
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+      <ScrollView removeClippedSubviews={false} onScroll={onScroll} scrollEventThrottle={16} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: tab ? 120 + insets.bottom : footer ? 24 : 40 + insets.bottom }}>
         {children}
       </ScrollView>
