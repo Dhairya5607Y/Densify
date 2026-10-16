@@ -14,6 +14,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.conscrypt.Conscrypt
+import io.github.muntashirakon.adb.AdbStream
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.Security
@@ -150,7 +153,14 @@ class AdbHub(private val ctx: Context) {
     if (!isConnected) { val c = connect(quiet = true); if (c.isFailure) { markDown(c.exceptionOrNull()?.message); return Result.failure(c.exceptionOrNull()!!) } }
     var last = run(cmd)
     if (last.isSuccess) return last
-    // The link can drop for a moment (Wi-Fi sleep, Wireless Debugging restarting). Reconnect quietly and retry the command.
+    // A single failed command is not a dead link. Retry once on the same connection first, because tearing it down and
+    // reconnecting makes Android post its "Wireless debugging connected" notification again every time.
+    if (isConnected) {
+      kotlinx.coroutines.delay(150)
+      last = run(cmd)
+      if (last.isSuccess) return last
+    }
+    // The link really dropped (Wi-Fi sleep, Wireless Debugging restarting). Reconnect quietly and retry the command.
     for (attempt in 1..2) {
       rootOk = false
       runCatching { mgr.disconnect() }
@@ -169,7 +179,23 @@ class AdbHub(private val ctx: Context) {
 
   private suspend fun run(cmd: String): Result<String> = withContext(Dispatchers.IO) {
     if (rootMode) runRoot(cmd)
-    else runCatching { mgr.openStream("shell:$cmd").use { it.openInputStream().bufferedReader().readText() } }
+    else runCatching { mgr.openStream("shell:$cmd").use { readAll(it) } }
+  }
+
+  /**
+   * Reads a command's whole output. adbd closes the stream as soon as a short command ends, and libadb then throws
+   * "Stream closed" at the end of the read even though every byte already arrived. That is the end of the output, not a failure.
+   */
+  private fun readAll(st: AdbStream): String {
+    val ins = st.openInputStream()
+    val out = ByteArrayOutputStream()
+    val buf = ByteArray(4096)
+    while (true) {
+      val n = try { ins.read(buf) } catch (e: IOException) { if (e.message?.contains("closed", ignoreCase = true) == true) break else throw e }
+      if (n < 0) break
+      out.write(buf, 0, n)
+    }
+    return out.toString("UTF-8")
   }
 
   suspend fun getSetting(ns: String, key: String): String = exec("settings get $ns $key").getOrNull()?.trim().orEmpty().ifEmpty { "null" }

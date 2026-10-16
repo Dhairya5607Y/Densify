@@ -18,7 +18,9 @@ import android.view.WindowManager
 import android.text.InputType
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.view.ViewOutlineProvider
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlinx.coroutines.launch
@@ -33,7 +35,7 @@ class FloatingPanel(private val ctx: Context) {
 
   private var root: LinearLayout? = null
   private var lp: WindowManager.LayoutParams? = null
-  private var bubble: TextView? = null
+  private var bubble: ImageView? = null
   private var panel: LinearLayout? = null
   private var valueLabel: TextView? = null
   private var scale = 1f
@@ -144,8 +146,15 @@ class FloatingPanel(private val ctx: Context) {
     val dim = Color.parseColor("#8B939E")
     val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.START }
 
-    val b = label(currentText(), 13f, Color.WHITE, true).apply {
-      background = shape(Color.parseColor("#E6101418"), 26f, 2f, ac)
+    // The bubble is the Densify logo. The density value lives in the panel it opens.
+    val b = ImageView(ctx).apply {
+      setImageResource(ctx.resources.getIdentifier("densify_logo", "drawable", ctx.packageName))
+      scaleType = ImageView.ScaleType.CENTER_CROP
+      background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#101418")); setStroke(px(2f).coerceAtLeast(1), ac) }
+      val ring = px(2f).coerceAtLeast(1)
+      setPadding(ring, ring, ring, ring)
+      outlineProvider = ViewOutlineProvider.BACKGROUND
+      clipToOutline = true
       layoutParams = LinearLayout.LayoutParams(px(52f), px(52f))
       isClickable = true
     }
@@ -238,7 +247,6 @@ class FloatingPanel(private val ctx: Context) {
 
   private fun refreshLabels() {
     val t = currentText()
-    bubble?.text = t
     valueLabel?.text = t
     if (panel?.visibility == View.VISIBLE) {
       Hub.scope.launch {
@@ -295,7 +303,7 @@ class FloatingPanel(private val ctx: Context) {
     val r = Hub.adb.setDensity(dpi)
     if (r.isSuccess) {
       Hub.log("Floating panel set $dpi DPI")
-      main.post { bubble?.text = dpi.toString(); valueLabel?.text = dpi.toString() }
+      main.post { valueLabel?.text = dpi.toString() }
     } else toast("Couldn't set DPI. Check connection.")
   }
 
