@@ -11,7 +11,8 @@ import android.os.Process
 class ForegroundDetector(private val ctx: Context) {
   private val usm = ctx.getSystemService(UsageStatsManager::class.java)
   private val pm = ctx.getSystemService(PowerManager::class.java)
-  private var lastQuery = System.currentTimeMillis() - 60_000
+  // Look back 10 minutes at first, so a game that is already open when Densify starts is still noticed.
+  private var lastQuery = System.currentTimeMillis() - 600_000
   private var current: String? = null
 
   /** The app currently in front, as of the last poll. */
@@ -29,7 +30,8 @@ class ForegroundDetector(private val ctx: Context) {
   fun poll(): String? {
     if (!screenOn) { current = null; lastQuery = System.currentTimeMillis(); return null }
     val now = System.currentTimeMillis()
-    val events = runCatching { usm.queryEvents(lastQuery, now) }.getOrNull() ?: return current
+    // Overlap the window a little: Android can write an event a moment after it happened. Replaying is harmless, the end state is the same.
+    val events = runCatching { usm.queryEvents((lastQuery - 3_000).coerceAtLeast(0), now) }.getOrNull() ?: return current
     lastQuery = now
     val e = UsageEvents.Event()
     while (events.hasNextEvent()) {

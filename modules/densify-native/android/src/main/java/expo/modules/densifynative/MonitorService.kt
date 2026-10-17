@@ -43,6 +43,8 @@ class MonitorService : Service() {
     if (Build.VERSION.SDK_INT >= 34) startForeground(Notifs.ID_MONITOR, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(Notifs.ID_MONITOR, first)
     Hub.scope.launch {
       if (!Hub.adb.isConnected) Hub.adb.connect(quiet = true)
+      // Learn the phone's own density as early as possible: it is the safe value to restore to.
+      if (Hub.adb.isConnected) Hub.adb.readDensity()
       Hub.engine.start()
     }
     watchWifi()
@@ -69,20 +71,28 @@ class MonitorService : Service() {
     floatJob?.cancel()
     floatJob = Hub.scope.launch {
       while (isActive) {
-        runCatching { ShizukuHost.tick(this@MonitorService, Hub.detector.foreground) }
-        val c = Hub.engine.config()
-        val s = Hub.engine.state.value
-        val key = s.activePkg ?: "always"
-        val forced = SystemClock.elapsedRealtime() < Hub.floatForceUntil
-        val wanted = forced || c.floating == "always" || (c.floating == "gaming" && s.activePkg != null)
-        val dismissed = panel.dismissedKey
-        if (dismissed != null && dismissed != key) panel.dismissedKey = null
-        val canDraw = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this@MonitorService)
-        if (wanted && canDraw && (forced || panel.dismissedKey != key)) panel.show(startOpen = forced) else panel.hide()
-        delay(if (forced) 500 else 1_500)
+        runCatching {
+          runCatching { ShizukuHost.tick(this@MonitorService, Hub.detector.foreground) }
+          val c = Hub.engine.config()
+          val s = Hub.engine.state.value
+          // A configured game on screen, whether or not its DPI could be applied. It leaves the moment the game does.
+          val game = s.frontPkg
+          val key = game ?: "always"
+          val forced = SystemClock.elapsedRealtime() < Hub.floatForceUntil
+          val wanted = forced || c.floating == "always" || (c.floating == "gaming" && game != null)
+          val dismissed = panel.dismissedKey
+          if (dismissed != null && dismissed != key) panel.dismissedKey = null
+          val canDraw = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this@MonitorService)
+          if (wanted && canDraw && (forced || panel.dismissedKey != key)) panel.show(startOpen = forced) else panel.hide()
+          // If the engine loop ever died, bring it back.
+          Hub.engine.ensureRunning()
+        }
+        delay(if (forced0()) 500 else 800)
       }
     }
   }
+
+  private fun forced0() = SystemClock.elapsedRealtime() < Hub.floatForceUntil
 
   /** Reconnects Wireless Debugging by itself when Wi-Fi comes back, so DPI switching keeps working after a network change. */
   private fun watchWifi() {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { api } from './src/native/api';
+import { api, useAdb } from './src/native/api';
 import { NavProvider, useNav } from './src/nav';
 import { StoreProvider, useStore } from './src/store/store';
 import { ThemeProvider } from './src/theme/ThemeContext';
@@ -34,9 +34,18 @@ function Slide({ children }: { children: React.ReactNode }) {
 }
 
 function Shell() {
-  const { state } = useStore();
+  const { state, update } = useStore();
   const nav = useNav();
+  const adb = useAdb();
   useEffect(() => { if (state.automation && !api.isMonitoring()) api.startMonitoring(); }, []);
+  // The default DPI is the phone's own (base) density. Fill it in by itself the first time Wireless Debugging connects, and
+  // replace a value that is really a game's DPI left over from an earlier failed restore.
+  useEffect(() => {
+    if (adb.state !== 'connected') return;
+    const bad = !state.defaultDpi || state.profiles.some((p) => p.dpi === state.defaultDpi);
+    if (!bad) return;
+    api.readDensity().then((d) => { if (d.physical > 0 && d.physical !== state.defaultDpi) update((s) => ({ ...s, defaultDpi: d.physical })); }).catch(() => {});
+  }, [adb.state]);
   const r = nav.route;
   return (
     <View style={{ flex: 1 }}>

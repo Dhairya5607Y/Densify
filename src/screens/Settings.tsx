@@ -27,7 +27,7 @@ export function Settings() {
     if (r.err !== undefined) { setDefErr(r.err); return; }
     setDefErr(''); update((s) => ({ ...s, defaultDpi: r.v })); toast({ title: `Default set to ${r.v} DPI` });
   };
-  const detect = () => api.readDensity().then((d) => { update((s) => ({ ...s, defaultDpi: d.effective })); toast({ title: `Detected ${d.effective} DPI`, sub: 'Saved as your default.' }); })
+  const detect = () => api.readDensity().then((d) => { update((s) => ({ ...s, defaultDpi: d.physical })); toast({ title: `Detected ${d.physical} DPI`, sub: "Your phone's own DPI, saved as your default." }); })
     .catch(async (e: Error) => { if (adb.state !== 'connected') { await ensure('preview'); return; } toast({ title: "Couldn't read the current DPI", sub: e.message, err: true, action: { label: 'Retry', run: detect } }); });
   const restore = () => api.restoreDefault().then((v) => toast({ title: `Restored ${v} DPI` }))
     .catch(async (e: Error) => { if (adb.state !== 'connected') { await ensure('preview'); return; } toast({ title: "Couldn't restore your default", sub: e.message, err: true, action: { label: 'Retry', run: restore } }); });
@@ -61,7 +61,7 @@ export function Settings() {
           <View style={{ width: 84, height: 44, borderRadius: t.rs, borderWidth: 1.5, borderColor: defErr ? t.c.wn : t.c.bd2, alignItems: 'center', justifyContent: 'center' }}>
             <TextInput value={def} onChangeText={(s) => { setDef(s.replace(/\D/g, '').slice(0, 4)); setDefErr(''); }} onEndEditing={saveDef} keyboardType="number-pad" placeholder="—" placeholderTextColor={t.c.mu} style={{ color: t.c.tx, fontSize: 16, fontWeight: '500', textAlign: 'center', width: '100%' }} />
           </View>} />
-        <Row leadIcon="sync" title="Detect current DPI" sub="Use what the device reports now" onPress={detect} />
+        <Row leadIcon="sync" title="Detect current DPI" sub="Use your phone's own built-in DPI" onPress={detect} />
         <Row leadIcon="undo" title="Restore Default DPI" sub={state.defaultDpi ? `Switch back to ${state.defaultDpi} DPI immediately` : 'Set your default first'} onPress={restore} />
       </Group>
       {defErr ? <T v="sub" c={t.c.wn} style={{ margin: 10 }}>{defErr}</T> : null}

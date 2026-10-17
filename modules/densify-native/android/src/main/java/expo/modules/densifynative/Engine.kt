@@ -68,6 +68,8 @@ data class EngineState(
   val running: Boolean = false,
   val appliedDpi: Int? = null,
   val activePkg: String? = null,
+  /** A configured game is on screen right now, even if DPI could not be applied. Drives the floating panel. */
+  val frontPkg: String? = null,
   val stretched: Boolean = false,
   val errTitle: String? = null,
   val errHint: String? = null,
@@ -101,6 +103,8 @@ class Engine(private val app: Context) {
   private var active: Profile? = null
   private var leftAt = 0L
   private var failedPkg: String? = null
+  private var failedAt = 0L
+  private var stuckChecked = false
   private var candPkg: String? = null
   private var candAt = 0L
   private var pendingRestore = false
@@ -114,22 +118,29 @@ class Engine(private val app: Context) {
     return cfg
   }
 
-  fun start() {
+  @Synchronized fun start() {
     if (job?.isActive == true) return
     pendingRestore = Hub.prefs.contains("snap")
     _state.update { it.copy(running = true) }
     job = Hub.scope.launch {
       checkBoot()
       while (isActive) {
-        if (!Hub.detector.hasAccess()) {
-          _state.update { it.copy(errTitle = "Usage Access is off.", errHint = "Allow Usage Access so Densify can see which game is open.") }
-        } else tick()
+        // One bad tick must never end the loop: a dead loop means no DPI changes and no floating panel until the app is reopened.
+        try {
+          if (!Hub.detector.hasAccess()) {
+            _state.update { it.copy(errTitle = "Usage Access is off.", errHint = "Allow Usage Access so Densify can see which game is open.") }
+          } else tick()
+        } catch (t: kotlinx.coroutines.CancellationException) { throw t
+        } catch (t: Throwable) { Hub.log("Engine hiccup: ${t.message}") }
         delay(if (!Hub.detector.screenOn) 6_000 else if (active != null) 700L else 1_500L)
       }
     }
   }
 
   fun stop() { job?.cancel(); _state.update { it.copy(running = false) } }
+
+  /** Called by the service now and then: brings the loop back if it ever died. */
+  fun ensureRunning() { if (job?.isActive != true) { Hub.log("Engine restarted"); start() } }
 
   /** Runs "boot" scripts once per device boot, the first time the engine starts after it. */
   private suspend fun checkBoot() {
@@ -148,12 +159,15 @@ class Engine(private val app: Context) {
     val c = config()
     val fg = Hub.detector.poll()
     // Densify itself is never a game, so opening the app can never change DPI.
-    val p = if (c.automation && fg != app.packageName) c.profiles.firstOrNull { it.pkg == fg && it.auto } else null
+    val front = if (fg != app.packageName) c.profiles.firstOrNull { it.pkg == fg } else null
+    if (_state.value.frontPkg != front?.pkg) _state.update { it.copy(frontPkg = front?.pkg) }
+    val p = if (c.automation && front != null && front.auto) front else null
     if (p != null) {
       leftAt = 0
-      if (failedPkg == p.pkg) return
-      // A game must stay in front for a moment before DPI changes, so a brief flash of its window doesn't trigger it.
       val nowMs = SystemClock.elapsedRealtime()
+      // After a failed attempt wait a few seconds, then try again instead of giving up until the game is reopened.
+      if (failedPkg == p.pkg) { if (nowMs - failedAt < 8_000) return; failedPkg = null }
+      // A game must stay in front for a moment before DPI changes, so a brief flash of its window doesn't trigger it.
       if (candPkg != p.pkg) { candPkg = p.pkg; candAt = nowMs }
       if (active?.pkg != p.pkg && nowMs - candAt < 700) return
       if (active?.pkg != p.pkg || active?.dpi != p.dpi) apply(p, c)
@@ -163,12 +177,22 @@ class Engine(private val app: Context) {
       val a = active
       if (a == null) {
         if (pendingRestore) { pendingRestore = false; restoreAll(c) }
+        else if (!stuckChecked && Hub.adb.isConnected) { stuckChecked = true; recoverStuckDensity(c) }
         return
       }
       val now = SystemClock.elapsedRealtime()
       if (leftAt == 0L) { leftAt = now; return }
       // Leaving the game for any reason (home, recents, another app, screen off) always returns DPI and size to the default.
       if (now - leftAt >= GRACE_MS) restoreAll(c)
+    }
+  }
+
+  /** A game DPI left behind by an earlier failed restore is put back to the default once, when Densify starts. */
+  private suspend fun recoverStuckDensity(c: Cfg) {
+    val d = Hub.adb.readDensity().getOrNull() ?: return
+    if (d.ovr != null && c.profiles.any { it.dpi == d.ovr }) {
+      Hub.log("Found ${d.ovr} DPI left over from a game. Restoring.")
+      restoreAll(c)
     }
   }
 
@@ -184,28 +208,37 @@ class Engine(private val app: Context) {
       runScripts("start", p.pkg)
     } else {
       failedPkg = p.pkg
+      failedAt = SystemClock.elapsedRealtime()
       Hub.log("Couldn't apply ${p.dpi} DPI: ${r.exceptionOrNull()?.message}")
       _state.update { it.copy(errTitle = "Couldn't apply ${p.dpi} DPI.", errHint = "Check your connection.") }
       restoreAll(c)
     }
   }
 
+  /**
+   * The density to go back to. A stored default that is zero, or that equals one of the games' own DPI values,
+   * is a leftover from a failed restore and not a real default, so the phone's own (base) density is used instead.
+   */
+  private suspend fun baseDpi(c: Cfg): Int? {
+    val phys = Hub.prefs.getInt("physDpi", 0).takeIf { it > 0 } ?: Hub.adb.readDensity().getOrNull()?.physical
+    val d = c.defaultDpi
+    val bogus = d <= 0 || c.profiles.any { it.dpi == d }
+    return if (bogus) null else if (phys != null && d == phys) null else d   // null = "reset to the phone's own density"
+  }
+
   suspend fun restoreAll(c: Cfg = config()): Result<Int> {
     val prev = active
     restoreBundle()
-    val d = c.defaultDpi
-    if (d <= 0) {
-      _state.update { it.copy(errTitle = "No default DPI set.", errHint = "Detect or enter your default DPI in Settings first.") }
-      return Result.failure(IllegalStateException("No default DPI"))
-    }
-    val r = Hub.adb.setDensity(d)
+    val target = baseDpi(c)
+    val r = if (target == null) Hub.adb.resetDensity() else Hub.adb.setDensity(target)
     if (r.isSuccess) {
+      val d = r.getOrDefault(target ?: 0)
       active = null; leftAt = 0; batteryNotified = false
       _state.update { it.copy(appliedDpi = d, activePkg = null, stretched = false, errTitle = null, errHint = null) }
       Hub.log("Restored $d DPI")
       if (prev != null) runScripts("exit", prev.pkg)
     } else {
-      _state.update { it.copy(errTitle = "Couldn't restore $d DPI.", errHint = "Check your connection, then retry.") }
+      _state.update { it.copy(errTitle = "Couldn't restore the default DPI.", errHint = "Check your connection, then retry.") }
     }
     return r
   }

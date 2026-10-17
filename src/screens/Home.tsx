@@ -38,7 +38,7 @@ export function Home() {
 
   const restore = () => api.restoreDefault().then((v) => { setCur(v); log(`Restored ${v} DPI`, 'Manual'); toast({ title: `Restored ${v} DPI` }); })
     .catch((e: Error) => toast({ title: `Couldn't restore ${state.defaultDpi || 'default'} DPI`, sub: e.message || 'Check your Wireless Debugging connection.', err: true, action: { label: 'Retry', run: restore } }));
-  const detect = () => api.readDensity().then((d) => { update((s) => ({ ...s, defaultDpi: d.effective })); toast({ title: `Detected ${d.effective} DPI`, sub: 'Saved as your default.' }); })
+  const detect = () => api.readDensity().then((d) => { update((s) => ({ ...s, defaultDpi: d.physical })); toast({ title: `Detected ${d.physical} DPI`, sub: "Your phone's own DPI, saved as your default." }); })
     .catch((e: Error) => toast({ title: "Couldn't read the current DPI", sub: e.message, err: true, action: { label: 'Retry', run: detect } }));
   const toggleAuto = async (v: boolean) => {
     if (v) { if (!(await ensure('automation'))) return; update((s) => ({ ...s, automation: true })); api.startMonitoring(); }

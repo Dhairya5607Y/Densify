@@ -33,6 +33,9 @@ class DensifyAdbManager(ctx: Context) : AbsAdbConnectionManager() {
 
   init {
     setApi(Build.VERSION.SDK_INT)
+    // The default is to wait forever for the handshake. A dead Wi-Fi link then holds the manager's lock for good,
+    // and every later call (even a simple isConnected) hangs with it.
+    setTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
     val loaded = runCatching {
       val key = KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(keyFile.readBytes()))
       val c = certFile.inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it) }

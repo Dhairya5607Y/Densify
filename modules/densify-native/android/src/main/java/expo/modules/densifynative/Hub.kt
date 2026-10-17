@@ -5,6 +5,8 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.view.Display
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -85,9 +87,13 @@ class AdbHub(private val ctx: Context) {
   private val _state = MutableStateFlow(AdbState("disconnected"))
   val state: StateFlow<AdbState> = _state
   @Volatile private var rootOk = false
+  /** Last known state of the link. Cheap and never blocks, so the UI thread can read it safely. */
+  @Volatile private var up = false
 
   private val rootMode: Boolean get() = Hub.engine.config().mode == "root"
-  val isConnected: Boolean get() = if (rootMode) rootOk else runCatching { mgr.isConnected }.getOrDefault(false)
+  val isConnected: Boolean get() = if (rootMode) rootOk else up
+  /** Asks the library itself. It takes the manager's lock, so only call it from a background thread. */
+  private fun linkAlive(): Boolean = runCatching { mgr.isConnected }.getOrDefault(false)
 
   suspend fun pair(port: Int, code: String): Result<Unit> = withContext(Dispatchers.IO) {
     runCatching { check(mgr.pair("127.0.0.1", port, code)) { "Android rejected the pairing code." } }
@@ -98,7 +104,7 @@ class AdbHub(private val ctx: Context) {
       if (rootMode) return@withContext connectRoot()
       val tcpip = Hub.engine.config().mode == "tcpip"
       if (!tcpip && Build.VERSION.SDK_INT < 30) return@withContext fail("Wireless Debugging needs Android 11 or newer. On Android 10 and below, use \"From a computer\" in Settings.")
-      if (isConnected) { _state.value = AdbState("connected"); return@withContext Result.success(Unit) }
+      if (linkAlive()) { up = true; _state.value = AdbState("connected"); return@withContext Result.success(Unit) }
       if (!quiet) _state.value = AdbState("connecting")
       try {
         if (tcpip) {
@@ -106,14 +112,14 @@ class AdbHub(private val ctx: Context) {
           val want = Hub.prefs.getString("tcpPort", null)?.trim()?.toIntOrNull()?.takeIf { it in 1024..65535 } ?: 5555
           for (port in listOf(want, 5555, 5556, 5557).distinct()) {
             val ok = runCatching { mgr.connect("127.0.0.1", port) }.getOrDefault(false)
-            if (ok) { _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
+            if (ok) { up = true; _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
           }
           return@withContext fail("Couldn't reach adb on port $want. On your computer run: adb tcpip $want", quiet)
         }
         // Wireless Debugging picks a new port whenever it is toggled, so look it up again and retry once before giving up.
         for (attempt in 1..2) {
           val ok = runCatching { mgr.connectTls(ctx, 8_000) }.getOrDefault(false)
-          if (ok) { _state.value = AdbState("connected"); Hub.log("Connected over Wireless Debugging"); return@withContext Result.success(Unit) }
+          if (ok) { up = true; _state.value = AdbState("connected"); Hub.log("Connected over Wireless Debugging"); return@withContext Result.success(Unit) }
           if (attempt == 1) kotlinx.coroutines.delay(600)
         }
         fail("Couldn't reach Wireless Debugging. Turn it on and make sure you're on Wi-Fi.", quiet)
@@ -144,6 +150,7 @@ class AdbHub(private val ctx: Context) {
 
   /** A quiet failure (a background retry) keeps showing the last state, so the UI doesn't flip back and forth. */
   private fun fail(msg: String, quiet: Boolean = false): Result<Unit> {
+    up = false
     if (!quiet) _state.value = AdbState("error", msg)
     Hub.log("Connection problem: $msg")
     return Result.failure(IllegalStateException(msg))
@@ -163,6 +170,7 @@ class AdbHub(private val ctx: Context) {
     // The link really dropped (Wi-Fi sleep, Wireless Debugging restarting). Reconnect quietly and retry the command.
     for (attempt in 1..2) {
       rootOk = false
+      up = false
       runCatching { mgr.disconnect() }
       kotlinx.coroutines.delay(400L * attempt)
       val c = connect(quiet = true)
@@ -177,9 +185,19 @@ class AdbHub(private val ctx: Context) {
   /** Only a confirmed outage reaches the UI. */
   private fun markDown(msg: String?) { _state.value = AdbState("error", msg ?: "Connection lost.") }
 
-  private suspend fun run(cmd: String): Result<String> = withContext(Dispatchers.IO) {
-    if (rootMode) runRoot(cmd)
-    else runCatching { mgr.openStream("shell:$cmd").use { readAll(it) } }
+  private suspend fun run(cmd: String): Result<String> {
+    if (rootMode) return withContext(Dispatchers.IO) { runRoot(cmd) }
+    // Blocking socket work runs on its own thread so a dead link can never freeze the caller: after 20 s we give up and report it.
+    val job = Hub.scope.async(Dispatchers.IO) {
+      runCatching { mgr.openStream("shell:$cmd").use { readAll(it) } }
+    }
+    val r = withTimeoutOrNull(20_000) { job.await() }
+    if (r == null) {
+      up = false
+      Hub.log("No answer from the device for: ${cmd.take(40)}")
+      return Result.failure(IllegalStateException("The device didn't answer. Check Wireless Debugging."))
+    }
+    return r
   }
 
   /**
@@ -261,7 +279,7 @@ class AdbHub(private val ctx: Context) {
     }
   }
 
-  fun disconnect() { resetSession(); runCatching { mgr.disconnect() }; rootOk = false; _state.value = AdbState("disconnected") }
+  fun disconnect() { resetSession(); up = false; runCatching { mgr.disconnect() }; rootOk = false; _state.value = AdbState("disconnected") }
 
   suspend fun readDensity(): Result<Density> = exec("wm density").mapCatching { out ->
     val phys = Regex("Physical density:\\s*(\\d+)").find(out)?.groupValues?.get(1)?.toInt() ?: error("Couldn't read the current DPI.")
@@ -283,6 +301,18 @@ class AdbHub(private val ctx: Context) {
       kotlinx.coroutines.delay(250)
     }
     return Result.failure(IllegalStateException("System reports $seen DPI instead of $dpi."))
+  }
+
+  /** Back to the phone's own density. Used when no valid default is stored, so a stuck game DPI can never be mistaken for the default. */
+  suspend fun resetDensity(): Result<Int> {
+    val out = exec("wm density reset").getOrElse { return Result.failure(it) }
+    if (out.contains("Error", true) || out.contains("Exception", true)) return Result.failure(IllegalStateException(out.trim()))
+    for (i in 0 until 6) {
+      val now = readDensity().getOrElse { return Result.failure(it) }
+      if (now.ovr == null) { Hub.log("Density reset to ${now.physical}"); return Result.success(now.physical) }
+      kotlinx.coroutines.delay(250)
+    }
+    return Result.failure(IllegalStateException("The system did not reset the density."))
   }
 
   suspend fun readSize(): Result<ScreenSize> = exec("wm size").mapCatching { out ->
