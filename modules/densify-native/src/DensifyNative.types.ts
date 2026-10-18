@@ -45,6 +45,10 @@ export interface NativeApi {
   sessionReset(): boolean;
   listPackages(): Promise<{ packageName: string; versionName: string; versionCode: number; appLabel: string; isSystem: boolean; uid: number }[]>;
   disconnect(): Promise<boolean>;
+  isPaired(): boolean;
+  bridgeActive(): boolean;
+  enableBridge(): Promise<boolean>;
+  disableBridge(): Promise<boolean>;
   startMonitoring(): boolean;
   stopMonitoring(): boolean;
 }

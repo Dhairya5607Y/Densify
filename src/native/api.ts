@@ -48,6 +48,10 @@ export const api = {
   sessionReset: () => (Native ? Native.sessionReset() : false),
   listPackages: async () => (Native ? Native.listPackages().catch(() => []) : []),
   disconnect: async () => (Native ? Native.disconnect() : false),
+  isPaired: () => (Native ? Native.isPaired() : false),
+  bridgeActive: () => (Native ? Native.bridgeActive() : false),
+  enableBridge: async () => { if (!Native) throw new Error('Only available in the installed app.'); return Native.enableBridge(); },
+  disableBridge: async () => (Native ? Native.disableBridge().catch(() => false) : false),
   restoreDefault: async () => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.restoreDefault(); },
 };
 

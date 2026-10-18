@@ -95,7 +95,13 @@ export function Settings() {
         <Row leadIcon="link" title={state.mode === 'root' ? 'Root access' : state.mode === 'tcpip' ? 'adb over network' : 'Wireless Debugging'} sub={stateLabel[0]} right={<Btn v={adb.state === 'connected' ? 'tonal' : 'pri'} label={state.mode === 'root' ? 'Connect' : 'Setup'} onPress={() => (state.mode === 'root' ? api.connect().catch((e: Error) => toast({ title: 'Root not available', sub: e.message, err: true })) : nav.push({ name: 'setup' }))} />} />
         <Row leadIcon="admin-panel-settings" title="Connection method" sub={state.mode === 'root' ? 'Root' : state.mode === 'tcpip' ? 'From a computer (adb tcpip)' : 'Wireless Debugging (Android 11+)'} below={
           ([['wireless', 'Wi-Fi'], ['tcpip', 'PC'], ['root', 'Root']] as const).map(([m, l]) => <Chip key={m} h={36} label={l} on={state.mode === m} onPress={() => { update((x) => ({ ...x, mode: m })); api.disconnect(); }} />)} />
-        <Row leadIcon="wifi" title="Reconnect automatically" sub="Turns Wireless Debugging back on when Wi-Fi returns" right={<AppSwitch on={state.autoReconnect} onChange={(v) => update((x) => ({ ...x, autoReconnect: v }))} />} />
+        <Row leadIcon="wifi" title="Reconnect automatically" sub="Pairing is remembered. Densify switches Wireless Debugging back on and reconnects by itself, so setup is only needed again after a reinstall." right={<AppSwitch on={state.autoReconnect} onChange={(v) => update((x) => ({ ...x, autoReconnect: v }))} />} />
+        <Row leadIcon="wifi-off" title="Keep working without Wi-Fi" sub="Experimental. Moves the connection to a local port, so DPI switching works with Wi-Fi off. Needs Wi-Fi once after every restart." right={<AppSwitch on={state.bridge} onChange={(v) => {
+          if (!v) { update((x) => ({ ...x, bridge: false })); api.disableBridge(); return; }
+          toast({ title: 'Setting up the local connection…', sub: 'Wireless Debugging will blink for a few seconds.' });
+          api.enableBridge().then(() => { update((x) => ({ ...x, bridge: true })); toast({ title: 'Works without Wi-Fi now', sub: 'Until the phone restarts.' }); })
+            .catch((e: Error) => toast({ title: "Couldn't turn it on", sub: e.message, err: true }));
+        }} />} />
       </Group>
 
       <Section title="Tools" />

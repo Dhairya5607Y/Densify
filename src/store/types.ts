@@ -20,6 +20,8 @@ export type AppState = {
   lowBatteryPercent: number;
   floating: 'off' | 'gaming' | 'always';
   autoReconnect: boolean;
+  /** Keep the adb link on a local port so DPI switching keeps working with Wi-Fi off. */
+  bridge: boolean;
   mode: 'wireless' | 'root' | 'tcpip';
   scripts: Script[];
   plugins: Plugin[];

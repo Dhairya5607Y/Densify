@@ -15,6 +15,7 @@ function toEngine(s: AppState) {
     lowBatteryPercent: s.lowBatteryPercent,
     floating: s.floating,
     autoReconnect: s.autoReconnect,
+    bridge: s.bridge,
     mode: s.mode,
     quick: s.quick,
     scripts: [

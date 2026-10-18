@@ -174,6 +174,11 @@ class DensifyNativeModule : Module() {
         }
       }
     }
+    // ---- one-time setup ----
+    Function("isPaired") { Hub.prefs.getBoolean("paired", false) }
+    Function("bridgeActive") { Hub.adb.viaBridge }
+    AsyncFunction("enableBridge") { promise: Promise -> run(promise) { Hub.adb.enableBridge().orThrow(); true } }
+    AsyncFunction("disableBridge") { promise: Promise -> run(promise) { Hub.adb.disableBridge(); true } }
     AsyncFunction("disconnect") { promise: Promise -> run(promise) { Hub.adb.disconnect(); true } }
 
     // ---- monitoring ----

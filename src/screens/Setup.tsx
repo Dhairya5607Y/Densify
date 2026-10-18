@@ -47,7 +47,7 @@ export function Setup() {
   const m0 = METHODS[method];
   const m = { ...m0, steps: m0.steps.map((x) => x.replace('PORT', portOk ? port : '5555')) };
   const stat = adb.state === 'connected' ? ['Connected', t.c.ok, 'Densify can change your display density.'] : adb.state === 'connecting' ? ['Connecting…', t.c.mu, 'Talking to Android…']
-    : adb.state === 'error' ? ['Connection error', t.c.wn, adb.message || "Couldn't reach Wireless Debugging. Turn it on, stay on Wi-Fi, then retry."] : ['Not connected', t.c.mu, 'Set up Wireless Debugging to enable DPI switching.'];
+    : adb.state === 'error' ? ['Connection error', t.c.wn, adb.message || "Couldn't reach Wireless Debugging. Turn it on, stay on Wi-Fi, then retry."] : ['Not connected', t.c.mu, api.isPaired() ? 'Already set up. Densify reconnects by itself when Wi-Fi is on. Tap Check connection to try now.' : 'Set up Wireless Debugging to enable DPI switching.'];
 
   const check = async () => {
     try {

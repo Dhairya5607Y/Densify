@@ -2,6 +2,9 @@ package expo.modules.densifynative
 
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.provider.Settings
 import android.os.Build
 import android.view.Display
 import kotlinx.coroutines.CoroutineScope
@@ -89,6 +92,10 @@ class AdbHub(private val ctx: Context) {
   @Volatile private var rootOk = false
   /** Last known state of the link. Cheap and never blocks, so the UI thread can read it safely. */
   @Volatile private var up = false
+  /** True while the link runs over the local adb port instead of Wireless Debugging. */
+  @Volatile var viaBridge = false
+    private set
+  @Volatile private var lastOk = 0L
 
   private val rootMode: Boolean get() = Hub.engine.config().mode == "root"
   val isConnected: Boolean get() = if (rootMode) rootOk else up
@@ -112,14 +119,23 @@ class AdbHub(private val ctx: Context) {
           val want = Hub.prefs.getString("tcpPort", null)?.trim()?.toIntOrNull()?.takeIf { it in 1024..65535 } ?: 5555
           for (port in listOf(want, 5555, 5556, 5557).distinct()) {
             val ok = runCatching { mgr.connect("127.0.0.1", port) }.getOrDefault(false)
-            if (ok) { up = true; _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
+            if (ok) { up = true; Hub.prefs.edit().putBoolean("paired", true).apply(); _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
           }
           return@withContext fail("Couldn't reach adb on port $want. On your computer run: adb tcpip $want", quiet)
         }
+        // With the bridge on, the local port works even when Wi-Fi is off, so try it first.
+        if (Hub.engine.config().bridge && connectLoopback()) {
+          up = true; viaBridge = true; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply()
+          Hub.log("Connected over the local adb port"); return@withContext Result.success(Unit)
+        }
         // Wireless Debugging picks a new port whenever it is toggled, so look it up again and retry once before giving up.
         for (attempt in 1..2) {
-          val ok = runCatching { mgr.connectTls(ctx, 8_000) }.getOrDefault(false)
-          if (ok) { up = true; _state.value = AdbState("connected"); Hub.log("Connected over Wireless Debugging"); return@withContext Result.success(Unit) }
+          val ok = try { mgr.connectTls(ctx, 8_000) } catch (e: Throwable) {
+            // Only a real "not paired" answer means setup has to be done again.
+            if (e.javaClass.simpleName == "AdbPairingRequiredException") Hub.prefs.edit().putBoolean("paired", false).apply()
+            false
+          }
+          if (ok) { up = true; viaBridge = false; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply(); Hub.log("Connected over Wireless Debugging"); return@withContext Result.success(Unit) }
           if (attempt == 1) kotlinx.coroutines.delay(600)
         }
         fail("Couldn't reach Wireless Debugging. Turn it on and make sure you're on Wi-Fi.", quiet)
@@ -182,6 +198,79 @@ class AdbHub(private val ctx: Context) {
     return last
   }
 
+  // ---- one-time setup: stay connected by itself ----
+
+  private fun connectLoopback(): Boolean = runCatching { mgr.connect("127.0.0.1", BRIDGE_PORT) }.getOrDefault(false)
+
+  private fun wifiUp(): Boolean {
+    val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return false
+    val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+    return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+  }
+
+  /**
+   * Called every few seconds by the service. Pairing is remembered by Android, so nothing here asks the user again:
+   * it switches Wireless Debugging back on, reconnects, and checks a quiet link now and then.
+   */
+  suspend fun keepAlive(autoReconnect: Boolean) {
+    if (rootMode) return
+    val cfg = Hub.engine.config()
+    if (!up) {
+      if (!autoReconnect) return
+      // Without Wi-Fi and without the local port there is nothing to reach, so don't waste battery trying.
+      if (!wifiUp() && !cfg.bridge && cfg.mode != "tcpip") return
+      if (cfg.mode == "wireless" && Build.VERSION.SDK_INT >= 30) runCatching { Settings.Global.putInt(ctx.contentResolver, "adb_wifi_enabled", 1) }
+      connect(quiet = true)
+      if (up && cfg.bridge && !viaBridge) enableBridge()
+    } else if (System.currentTimeMillis() - lastOk > 60_000) {
+      exec("true")
+    }
+  }
+
+  /**
+   * Moves the link to a local adb port (127.0.0.1:5555). That port does not depend on Wi-Fi, so DPI switching keeps working
+   * with Wi-Fi off. Android forgets the port at every restart, so it is set up again the next time Wireless Debugging connects.
+   */
+  suspend fun enableBridge(): Result<Unit> {
+    if (rootMode) return Result.failure(IllegalStateException("Not needed in root mode."))
+    if (Build.VERSION.SDK_INT < 23 || ctx.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+      return Result.failure(IllegalStateException("Finish the Wireless Debugging setup first, so Densify can restart Android's debugging service."))
+    if (viaBridge && up) return Result.success(Unit)
+    if (!isConnected) { val c = connect(quiet = true); if (c.isFailure) return Result.failure(c.exceptionOrNull()!!) }
+    exec("setprop service.adb.tcp.port $BRIDGE_PORT")
+    val port = exec("getprop service.adb.tcp.port").getOrNull()?.trim().orEmpty()
+    if (port != BRIDGE_PORT.toString()) return Result.failure(IllegalStateException("This phone doesn't let Densify open the local port."))
+    val cr = ctx.contentResolver
+    val wifiWas = runCatching { Settings.Global.getInt(cr, "adb_wifi_enabled", 0) }.getOrDefault(0)
+    val ok = lock.withLock {
+      withContext(Dispatchers.IO) {
+        up = false; viaBridge = false
+        runCatching { mgr.disconnect() }
+        // Turning USB debugging off and on restarts Android's debugging service, which then listens on the local port.
+        runCatching { Settings.Global.putInt(cr, "adb_enabled", 0) }
+        kotlinx.coroutines.delay(1_200)
+        runCatching { Settings.Global.putInt(cr, "adb_enabled", 1) }
+        if (wifiWas == 1) runCatching { Settings.Global.putInt(cr, "adb_wifi_enabled", 1) }
+        kotlinx.coroutines.delay(2_500)
+        var connected = false
+        for (i in 0 until 4) { if (connectLoopback()) { connected = true; break }; kotlinx.coroutines.delay(1_500) }
+        if (connected) { up = true; viaBridge = true; _state.value = AdbState("connected"); Hub.log("Local adb port is on. Densify now works without Wi-Fi.") }
+        connected
+      }
+    }
+    if (ok) return Result.success(Unit)
+    // Didn't work on this phone: go back to Wireless Debugging so nothing is lost.
+    Hub.log("Local adb port refused the connection. Back to Wireless Debugging.")
+    connect(quiet = true)
+    return Result.failure(IllegalStateException("Android didn't accept the local connection, so Densify stays on Wireless Debugging. If a debugging prompt appeared, allow it with Always allow and try again."))
+  }
+
+  suspend fun disableBridge() {
+    if (viaBridge) exec("setprop service.adb.tcp.port 0")
+  }
+
+  companion object { const val BRIDGE_PORT = 5555 }
+
   /** Only a confirmed outage reaches the UI. */
   private fun markDown(msg: String?) { _state.value = AdbState("error", msg ?: "Connection lost.") }
 
@@ -197,6 +286,7 @@ class AdbHub(private val ctx: Context) {
       Hub.log("No answer from the device for: ${cmd.take(40)}")
       return Result.failure(IllegalStateException("The device didn't answer. Check Wireless Debugging."))
     }
+    if (r.isSuccess) { up = true; lastOk = System.currentTimeMillis() }
     return r
   }
 
@@ -359,6 +449,8 @@ class AdbHub(private val ctx: Context) {
     if (b.isFailure) return Result.failure(b.exceptionOrNull()!!)
     // Best effort: lets the floating panel appear without a trip to Settings.
     exec("appops set $pkg SYSTEM_ALERT_WINDOW allow")
+    // Best effort: Android forgets authorised computers after a week by default. Turn that timeout off so setup really is one time.
+    exec("settings put global adb_allowed_connection_time 0")
     return Result.success(Unit)
   }
 }

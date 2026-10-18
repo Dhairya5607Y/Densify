@@ -15,6 +15,7 @@ export const DEFAULT_STATE: AppState = {
   lowBatteryPercent: 50,
   floating: 'off',
   autoReconnect: true,
+  bridge: false,
   mode: 'wireless',
   scripts: [],
   plugins: [],

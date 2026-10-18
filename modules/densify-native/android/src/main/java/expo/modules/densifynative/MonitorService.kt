@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 class MonitorService : Service() {
   private var watcher: Job? = null
   private var floatJob: Job? = null
+  private var linkJob: Job? = null
   private var floating: FloatingPanel? = null
   private var netCb: ConnectivityManager.NetworkCallback? = null
   override fun onBind(intent: Intent?): IBinder? = null
@@ -48,6 +49,7 @@ class MonitorService : Service() {
       Hub.engine.start()
     }
     watchWifi()
+    startLinkKeeper()
     startFloating()
     watcher?.cancel()
     watcher = Hub.scope.launch {
@@ -63,6 +65,17 @@ class MonitorService : Service() {
       }
     }
     return START_STICKY
+  }
+
+  /** Keeps the adb link alive for good: after the one-time setup nothing should ever ask the user again. */
+  private fun startLinkKeeper() {
+    linkJob?.cancel()
+    linkJob = Hub.scope.launch {
+      while (isActive) {
+        runCatching { Hub.adb.keepAlive(Hub.engine.config().autoReconnect) }
+        delay(20_000)
+      }
+    }
   }
 
   /** Shows or hides the floating panel according to the user's setting and what is happening on screen. */
@@ -116,6 +129,7 @@ class MonitorService : Service() {
     Hub.engine.stop()
     watcher?.cancel()
     floatJob?.cancel()
+    linkJob?.cancel()
     floating?.hide()
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null
@@ -124,6 +138,7 @@ class MonitorService : Service() {
   override fun onDestroy() {
     watcher?.cancel()
     floatJob?.cancel()
+    linkJob?.cancel()
     floating?.hide()
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null

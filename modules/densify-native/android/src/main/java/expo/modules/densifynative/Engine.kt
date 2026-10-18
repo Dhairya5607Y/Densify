@@ -33,6 +33,8 @@ data class Cfg(
   val quick: List<Int> = emptyList(),
   val profiles: List<Profile> = emptyList(),
   val scripts: List<ScriptCfg> = emptyList(),
+  /** Keep the adb link on a local port so it survives Wi-Fi being switched off. */
+  val bridge: Boolean = false,
 ) {
   companion object {
     fun parse(raw: String): Cfg = runCatching {
@@ -59,6 +61,7 @@ data class Cfg(
             ScriptCfg(s.getString("name"), s.getString("code"), s.getString("trigger"), s.optString("pkg", ""), s.optBoolean("on", true))
           }.getOrNull()
         },
+        o.optBoolean("bridge", false),
       )
     }.getOrDefault(Cfg())
   }
