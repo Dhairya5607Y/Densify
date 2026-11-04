@@ -44,7 +44,7 @@ class ApiService : Service() {
             2 -> {
               val dpi = data.readInt()
               Hub.log("API ($pkg): set $dpi DPI")
-              val r = runBlocking(Dispatchers.IO) { Hub.adb.setDensity(dpi) }.getOrThrow()
+              val r = runBlocking(Dispatchers.IO) { Hub.engine.adjustDpi(dpi) }.getOrThrow()
               reply?.writeNoException(); reply?.writeInt(r)
             }
             3 -> {

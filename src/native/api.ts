@@ -9,6 +9,14 @@ export const nativeAvailable = Native != null;
 
 const caps0: Capabilities = { hz: 60, perf: false, guard: false, tile: false };
 
+export type ShizukuStatus = 'MISSING' | 'STOPPED' | 'NEEDS_PERMISSION' | 'READY';
+/** What the phone is (read from the device) and which connection method suits it. */
+export type DeviceInfo = {
+  sdk: number; release: string; brand: string; model: string; rom: string; romVersion: string;
+  wifi: boolean; wirelessSupported: boolean; devOptions: boolean; usbDebugging: boolean; wirelessDebugging: boolean; secureSettings: boolean;
+  shizuku: ShizukuStatus; recommended: 'shizuku' | 'tcpip' | 'wireless'; tips: string[];
+};
+
 export const api = {
   storageGet: (k: string) => (Native ? Native.storageGet(k) : null),
   storageSet: (k: string, v: string) => (Native ? Native.storageSet(k, v) : false),
@@ -53,6 +61,19 @@ export const api = {
   enableBridge: async () => { if (!Native) throw new Error('Only available in the installed app.'); return Native.enableBridge(); },
   disableBridge: async () => (Native ? Native.disableBridge().catch(() => false) : false),
   restoreDefault: async () => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.restoreDefault(); },
+  deviceInfo: async (): Promise<DeviceInfo | null> => {
+    if (!Native) return null;
+    try { return JSON.parse(await Native.deviceInfo()) as DeviceInfo; } catch { return null; }
+  },
+  shizukuStatus: async (): Promise<ShizukuStatus> => (Native ? ((await Native.shizukuStatus().catch(() => 'MISSING')) as ShizukuStatus) : 'MISSING'),
+  shizukuRequest: async (): Promise<ShizukuStatus> => (Native ? ((await Native.shizukuRequest().catch(() => 'MISSING')) as ShizukuStatus) : 'MISSING'),
+  shizukuOpen: () => (Native ? Native.shizukuOpen() : false),
+  pairManual: async (port: number, code: string) => { if (!Native) throw new Error('Only available in the installed app.'); return Native.pairManual(port, code); },
+  perfWatch: (on: boolean) => (Native ? Native.perfWatch(on) : false),
+  perfLive: () => (Native ? Native.perfLive() : ''),
+  perfSessions: () => (Native ? Native.perfSessions() : '[]'),
+  perfClear: () => (Native ? Native.perfClear() : false),
+  optimizeNow: async () => { if (!Native) throw new Error('Only available in the installed app.'); return Native.optimizeNow(); },
 };
 
 export function useAdb() {

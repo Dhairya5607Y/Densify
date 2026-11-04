@@ -16,6 +16,7 @@ import android.os.IBinder
 class PairingService : Service() {
   private lateinit var nsd: NsdManager
   private var listener: NsdManager.DiscoveryListener? = null
+  private val handler = android.os.Handler(android.os.Looper.getMainLooper())
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -31,13 +32,16 @@ class PairingService : Service() {
 
   @Suppress("DEPRECATION")
   private fun discover() {
-    val l = object : NsdManager.DiscoveryListener {
-      override fun onServiceFound(info: NsdServiceInfo) {
-        nsd.resolveService(info, object : NsdManager.ResolveListener {
-          override fun onServiceResolved(r: NsdServiceInfo) { stopDiscovery(); showInput(r.port) }
-          override fun onResolveFailed(i: NsdServiceInfo, code: Int) {}
-        })
+    // If the phone never announces the pairing port (it happens on some ROMs), say so instead of waiting forever.
+    handler.postDelayed({
+      if (listener != null) {
+        stopDiscovery()
+        note(Notifs.builder(this).setContentTitle("Couldn't find the pairing port").setContentText("Open Densify > Setup and use “Pair with port and code”.").build())
+        stopSelf()
       }
+    }, 30_000L)
+    val l = object : NsdManager.DiscoveryListener {
+      override fun onServiceFound(info: NsdServiceInfo) { resolve(info, 0) }
       override fun onDiscoveryStarted(t: String) {}
       override fun onDiscoveryStopped(t: String) {}
       override fun onServiceLost(i: NsdServiceInfo) {}
@@ -50,6 +54,19 @@ class PairingService : Service() {
     nsd.discoverServices("_adb-tls-pairing._tcp", NsdManager.PROTOCOL_DNS_SD, l)
   }
 
+  /** Android resolves one service at a time and answers "already active" to the rest, so a refused resolve is simply tried again. */
+  @Suppress("DEPRECATION")
+  private fun resolve(info: NsdServiceInfo, tries: Int) {
+    runCatching {
+      nsd.resolveService(info, object : NsdManager.ResolveListener {
+        override fun onServiceResolved(r: NsdServiceInfo) { stopDiscovery(); showInput(r.port) }
+        override fun onResolveFailed(i: NsdServiceInfo, code: Int) {
+          if (tries < 10) handler.postDelayed({ if (listener != null) resolve(info, tries + 1) }, 350L)
+        }
+      })
+    }.onFailure { if (tries < 10) handler.postDelayed({ if (listener != null) resolve(info, tries + 1) }, 350L) }
+  }
+
   private fun stopDiscovery() { listener?.let { runCatching { nsd.stopServiceDiscovery(it) } }; listener = null }
 
   private fun showInput(port: Int) {
@@ -60,5 +77,5 @@ class PairingService : Service() {
     note(Notifs.builder(this).setContentTitle("Enter the 6-digit pairing code").setContentText("Pairing port found. Type the code shown by Android.").addAction(action).setOngoing(true).build())
   }
 
-  override fun onDestroy() { stopDiscovery(); super.onDestroy() }
+  override fun onDestroy() { handler.removeCallbacksAndMessages(null); stopDiscovery(); super.onDestroy() }
 }

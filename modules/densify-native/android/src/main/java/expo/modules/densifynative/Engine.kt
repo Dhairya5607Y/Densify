@@ -22,6 +22,12 @@ data class BundleCfg(val hz: Boolean, val perf: Boolean, val dnd: Boolean, val r
 data class StretchCfg(val on: Boolean = false, val w: Int = 0, val h: Int = 0)
 data class Profile(val pkg: String, val name: String, val dpi: Int, val auto: Boolean, val restore: Boolean, val bundle: BundleCfg, val stretch: StretchCfg = StretchCfg())
 data class ScriptCfg(val name: String, val code: String, val trigger: String, val pkg: String, val on: Boolean)
+/** What the optimizer does by itself when a game opens. Everything it changes is put back when the game closes. */
+data class OptCfg(val ram: Boolean = false, val anim: Boolean = false, val net: Boolean = false, val gameMode: Boolean = false)
+
+val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
+private fun hudFieldsFrom(f: JSONObject?): Set<String> = if (f == null) HUD_FIELDS.toSet() else HUD_FIELDS.filter { f.optBoolean(it, true) }.toSet()
+
 data class Cfg(
   val defaultDpi: Int = 0,
   val automation: Boolean = true,
@@ -35,6 +41,13 @@ data class Cfg(
   val scripts: List<ScriptCfg> = emptyList(),
   /** Keep the adb link on a local port so it survives Wi-Fi being switched off. */
   val bridge: Boolean = false,
+  /** Live stats overlay: "off", "gaming" or "always", its corner (tl, tr, bl, br) and which numbers it shows. */
+  val hud: String = "off",
+  val hudPos: String = "tr",
+  val hudFields: Set<String> = HUD_FIELDS.toSet(),
+  /** Record FPS, CPU, temperature and RAM while a configured game is open. */
+  val record: Boolean = true,
+  val opt: OptCfg = OptCfg(),
 ) {
   companion object {
     fun parse(raw: String): Cfg = runCatching {
@@ -62,6 +75,8 @@ data class Cfg(
           }.getOrNull()
         },
         o.optBoolean("bridge", false),
+        o.optString("hud", "off"), o.optString("hudPos", "tr"), hudFieldsFrom(o.optJSONObject("hudFields")), o.optBoolean("record", true),
+        o.optJSONObject("opt")?.let { OptCfg(it.optBoolean("ram"), it.optBoolean("anim"), it.optBoolean("net"), it.optBoolean("gameMode")) } ?: OptCfg(),
       )
     }.getOrDefault(Cfg())
   }
@@ -111,6 +126,11 @@ class Engine(private val app: Context) {
   private var candPkg: String? = null
   private var candAt = 0L
   private var pendingRestore = false
+  /**
+   * After DPI or screen size changes (by hand or by a profile) most games relaunch their window, and for a moment no game is in front.
+   * Until this time that gap is not read as "left the game", so the engine never restores over the user's change.
+   */
+  @Volatile private var holdUntil = 0L
   private var batteryNotified = false
   private var raw = ""
   private var cfg = Cfg()
@@ -184,6 +204,7 @@ class Engine(private val app: Context) {
         return
       }
       val now = SystemClock.elapsedRealtime()
+      if (now < holdUntil) { leftAt = 0; return }
       if (leftAt == 0L) { leftAt = now; return }
       // Leaving the game for any reason (home, recents, another app, screen off) always returns DPI and size to the default.
       if (now - leftAt >= GRACE_MS) restoreAll(c)
@@ -202,10 +223,12 @@ class Engine(private val app: Context) {
   private suspend fun apply(p: Profile, c: Cfg) {
     Hub.log("${p.name} (${p.pkg}) in front. Applying ${p.dpi} DPI${if (p.stretch.on) " and stretch" else ""}")
     applyBundle(p.bundle)
+    runCatching { applyOptimizer(c.opt, p.pkg) }.onFailure { Hub.log("Optimizer hiccup: ${it.message}") }
     if (p.stretch.on) applyStretch(p.stretch) else if (_state.value.stretched) restoreSizeOnly()
     val r = Hub.adb.setDensity(p.dpi)
     if (r.isSuccess) {
       active = p
+      holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
       _state.update { it.copy(appliedDpi = p.dpi, activePkg = p.pkg, errTitle = null, errHint = null) }
       maybeWarnBattery(c)
       runScripts("start", p.pkg)
@@ -236,7 +259,7 @@ class Engine(private val app: Context) {
     val r = if (target == null) Hub.adb.resetDensity() else Hub.adb.setDensity(target)
     if (r.isSuccess) {
       val d = r.getOrDefault(target ?: 0)
-      active = null; leftAt = 0; batteryNotified = false
+      active = null; leftAt = 0; holdUntil = 0; batteryNotified = false
       _state.update { it.copy(appliedDpi = d, activePkg = null, stretched = false, errTitle = null, errHint = null) }
       Hub.log("Restored $d DPI")
       if (prev != null) runScripts("exit", prev.pkg)
@@ -245,6 +268,37 @@ class Engine(private val app: Context) {
     }
     return r
   }
+
+  /**
+   * The one way to change DPI by hand (floating panel, notification, tile, app, external API). The engine learns the new value, so no
+   * screen keeps showing the old one, and it will not restore over the change while the game relaunches its window.
+   */
+  suspend fun adjustDpi(dpi: Int): Result<Int> {
+    val target = dpi.coerceIn(72, 1000)
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    val r = Hub.adb.setDensity(target)
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    if (r.isSuccess) {
+      _state.update { it.copy(appliedDpi = target) }
+      Hub.log("DPI set to $target by hand")
+    }
+    return r
+  }
+
+  /** Reads the real density and size again after something outside the engine changed them (terminal, scripts, other apps). */
+  suspend fun syncFromDevice() {
+    val d = Hub.adb.readDensity().getOrNull()
+    val z = Hub.adb.readSize().getOrNull()
+    if (z != null && z.overrideText == null) {
+      val snap = readSnap()
+      if (snap.has("size")) { snap.remove("size"); writeSnap(snap) }
+    }
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    _state.update { it.copy(appliedDpi = d?.effective ?: it.appliedDpi, stretched = if (z != null) z.overrideText != null else it.stretched) }
+  }
+
+  /** One-tap RAM clean from the app or the floating panel. Returns a short sentence to show. */
+  suspend fun optimizeNow(): String = Optimizer.cleanRam()
 
   /** Floating-panel action: stretch on/off for the game that is open right now. */
   suspend fun toggleStretch(): Boolean {
@@ -260,7 +314,10 @@ class Engine(private val app: Context) {
   suspend fun stretchNow(w: Int, h: Int): Boolean {
     if (w !in 320..4096 || h !in 320..4096) { Hub.log("Stretch skipped: ${w}x$h is out of range"); return false }
     Hub.prefs.edit().putInt("stretchW", w).putInt("stretchH", h).apply()
-    return applyStretch(w, h)
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    val ok = applyStretch(w, h)
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    return ok
   }
 
   /** Puts the screen size back to what it was before stretching (or to the system default). */
@@ -319,11 +376,38 @@ class Engine(private val app: Context) {
     writeSnap(snap)
   }
 
+  /** The optimizer's per-game changes. Each one is recorded in the snapshot first, so closing the game puts everything back. */
+  private suspend fun applyOptimizer(o: OptCfg, pkg: String) {
+    if (!o.ram && !o.anim && !o.net && !o.gameMode) return
+    val snap = readSnap()
+    suspend fun put(ns: String, k: String, v: String) {
+      val key = "$ns/$k"
+      if (!snap.has(key)) snap.put(key, Hub.adb.getSetting(ns, k))
+      Hub.adb.exec("settings put $ns $k $v")
+    }
+    if (o.ram) Hub.log(Optimizer.cleanRam())
+    if (o.anim) {
+      put("global", "window_animation_scale", "0.5")
+      put("global", "transition_animation_scale", "0.5")
+      put("global", "animator_duration_scale", "0.5")
+    }
+    if (o.net) {
+      // Fewer background radio scans means fewer ping spikes mid-match.
+      put("global", "wifi_scan_always_enabled", "0")
+      put("global", "ble_scan_always_enabled", "0")
+      if (!snap.has("lowlat") && Optimizer.lowLatencyWifi(true)) snap.put("lowlat", "1")
+    }
+    if (o.gameMode && !snap.has("gm") && Optimizer.setGameMode(pkg, true)) snap.put("gm", pkg)
+    writeSnap(snap)
+  }
+
   private suspend fun restoreBundle() {
     val raw = Hub.prefs.getString("snap", null) ?: return
     val snap = JSONObject(raw)
     for (key in snap.keys().asSequence().toList()) {
       if (key == "perf") { Hub.adb.exec("cmd power set-fixed-performance-mode-enabled false"); continue }
+      if (key == "lowlat") { Optimizer.lowLatencyWifi(false); continue }
+      if (key == "gm") { Optimizer.setGameMode(snap.getString(key), false); continue }
       if (key == "size") {
         val v = snap.getString(key)
         if (v == "reset") Hub.adb.resetSize() else Hub.adb.exec("wm size $v")
@@ -356,7 +440,11 @@ class Engine(private val app: Context) {
     }
   }
 
-  companion object { const val GRACE_MS = 1_200L }
+  companion object {
+    const val GRACE_MS = 1_200L
+    /** How long after a DPI or size change the engine ignores a game briefly leaving the screen. */
+    const val HOLD_MS = 6_000L
+  }
 }
 
 data class BatteryInfo(val level: Int, val charging: Boolean, val tempC: Float)

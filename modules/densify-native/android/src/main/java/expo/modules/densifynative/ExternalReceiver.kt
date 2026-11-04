@@ -23,7 +23,7 @@ class ExternalReceiver : BroadcastReceiver() {
         when (intent.action) {
           ACTION_SET_DPI -> {
             val dpi = intent.getIntExtra("dpi", 0)
-            val r = Hub.adb.setDensity(dpi)
+            val r = Hub.engine.adjustDpi(dpi)
             Hub.log("External request: ${dpi} DPI ${if (r.isSuccess) "applied" else "failed"}")
           }
           ACTION_RESTORE -> { Hub.engine.restoreAll(); Hub.log("External request: restore") }

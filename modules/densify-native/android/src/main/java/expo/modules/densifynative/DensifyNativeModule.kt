@@ -37,6 +37,8 @@ class DensifyNativeModule : Module() {
   }
   private fun startSvc(c: Context, i: Intent) { if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i) }
   private fun <T> Result<T>.orThrow(): T = getOrElse { throw IllegalStateException(it.message ?: "Failed") }
+  private val displayCmd = Regex("\\bwm\\s+(size|density)\\b")
+  private fun touchesDisplay(cmd: String) = displayCmd.containsMatchIn(cmd)
 
   override fun definition() = ModuleDefinition {
     Name("DensifyNative")
@@ -126,7 +128,7 @@ class DensifyNativeModule : Module() {
 
     // ---- density ----
     AsyncFunction("readDensity") { promise: Promise -> run(promise) { val d = Hub.adb.readDensity().orThrow(); mapOf("physical" to d.physical, "effective" to d.effective) } }
-    AsyncFunction("setDensity") { dpi: Int, promise: Promise -> run(promise) { Hub.adb.setDensity(dpi).orThrow() } }
+    AsyncFunction("setDensity") { dpi: Int, promise: Promise -> run(promise) { Hub.engine.adjustDpi(dpi).orThrow() } }
     AsyncFunction("restoreDefault") { promise: Promise -> run(promise) { Hub.engine.restoreAll().orThrow() } }
 
     // ---- screen size (stretch) ----
@@ -148,7 +150,12 @@ class DensifyNativeModule : Module() {
 
     // ---- shell, logs, floating preview ----
     AsyncFunction("shell") { cmd: String, promise: Promise ->
-      run(promise) { Hub.log("$ " + cmd.take(80)); Hub.adb.exec(cmd).orThrow() }
+      run(promise) {
+        Hub.log("$ " + cmd.take(80))
+        val out = Hub.adb.exec(cmd).orThrow()
+        if (touchesDisplay(cmd)) Hub.engine.syncFromDevice()
+        out
+      }
     }
     Function("logs") { Hub.logs() }
     Function("clearLogs") { Hub.clearLogs(); true }
@@ -156,7 +163,31 @@ class DensifyNativeModule : Module() {
       Hub.floatForceUntil = android.os.SystemClock.elapsedRealtime() + seconds.coerceIn(1, 60) * 1000L
       true
     }
-    AsyncFunction("sessionExec") { cmd: String, promise: Promise -> run(promise) { Hub.adb.sessionExec(cmd).orThrow() } }
+    AsyncFunction("sessionExec") { cmd: String, promise: Promise ->
+      run(promise) {
+        val out = Hub.adb.sessionExec(cmd).orThrow()
+        // "wm size reset" prints nothing, so the app must read the screen again to know it changed.
+        if (touchesDisplay(cmd)) Hub.engine.syncFromDevice()
+        out
+      }
+    }
+
+    // ---- phone detection, Shizuku and manual pairing ----
+    AsyncFunction("deviceInfo") { promise: Promise -> run(promise) { DeviceInfo.snapshot(ctx).toString() } }
+    AsyncFunction("shizukuStatus") { promise: Promise -> run(promise) { ShizukuLink.status(ctx).name } }
+    AsyncFunction("shizukuRequest") { promise: Promise -> run(promise) { ShizukuLink.requestPermission(ctx).name } }
+    Function("shizukuOpen") { ShizukuLink.open(ctx) }
+    // For phones that never announce the pairing port: the user types the port and code Android shows.
+    AsyncFunction("pairManual") { port: Int, code: String, promise: Promise ->
+      run(promise) { Hub.adb.pair(port, code.trim()).orThrow(); Hub.adb.connect().orThrow(); true }
+    }
+
+    // ---- live stats, recorded sessions and the optimizer ----
+    Function("perfWatch") { on: Boolean -> if (on) { Perf.start(); Perf.noteAppPoll(); Perf.acquire("app") } else Perf.release("app"); true }
+    Function("perfLive") { Perf.noteAppPoll(); Perf.latest.toJson().toString() }
+    Function("perfSessions") { Perf.sessionsJson() }
+    Function("perfClear") { Perf.clearSessions(); true }
+    AsyncFunction("optimizeNow") { promise: Promise -> run(promise) { Hub.engine.optimizeNow() } }
     Function("sessionReset") { Hub.adb.resetSession(); true }
     AsyncFunction("listPackages") { promise: Promise ->
       run(promise) {

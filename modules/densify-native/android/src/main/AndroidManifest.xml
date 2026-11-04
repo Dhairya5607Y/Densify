@@ -13,7 +13,11 @@
   <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
   <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
   <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+  <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
   <application>
+    <provider android:name="expo.modules.densifynative.DensifyShizukuProvider" android:authorities="${applicationId}.shizuku"
+        android:multiprocess="false" android:enabled="true" android:exported="true"
+        android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     <service android:name="expo.modules.densifynative.MonitorService" android:exported="false"
         android:foregroundServiceType="specialUse">
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

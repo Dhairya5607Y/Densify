@@ -5,7 +5,16 @@ export const NO_STRETCH = { on: false, w: 0, h: 0 } as const;
 export const NO_BUNDLE: Bundle = { hz: false, perf: false, dnd: false, rot: false, guard: false, bright: false, awake: false };
 
 /** Seed values only. Everything here is editable in the app and then lives in storage. */
+export const DEFAULT_PERF: AppState['perf'] = {
+  hud: 'off',
+  pos: 'tr',
+  fields: { fps: true, cpu: true, temp: true, ram: true, ping: true },
+  record: true,
+  opt: { ram: false, anim: false, net: false, gameMode: false },
+};
+
 export const DEFAULT_STATE: AppState = {
+  perf: DEFAULT_PERF,
   themeId: 'matte',
   accent: '',
   defaultDpi: 0, // 0 = not detected yet; set from the device on first run

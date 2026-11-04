@@ -17,6 +17,7 @@ import { Home } from './src/screens/Home';
 import { Presets } from './src/screens/Presets';
 import { Profile } from './src/screens/Profile';
 import { Settings } from './src/screens/Settings';
+import { Stats } from './src/screens/Stats';
 import { Setup } from './src/screens/Setup';
 import { Scripts } from './src/screens/Scripts';
 import { Tools } from './src/screens/Tools';
@@ -52,6 +53,7 @@ function Shell() {
       <Backdrop />
       {nav.tab === 'home' && <Home />}
       {nav.tab === 'games' && <Games />}
+      {nav.tab === 'stats' && <Stats />}
       {nav.tab === 'settings' && <Settings />}
       <TabBar tab={nav.tab} onTab={nav.setTab} />
       {r && (

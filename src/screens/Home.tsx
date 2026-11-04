@@ -69,7 +69,7 @@ export function Home() {
 
       <StretchCard />
 
-      {!connected && (api.isPaired() && state.mode !== 'root'
+      {!connected && (api.isPaired() && state.mode !== 'root' && state.mode !== 'shizuku'
         ? <Banner icon="link" title="Reconnecting to Android…" sub="Densify is already set up and reconnects by itself when Wi-Fi is on." action="Retry" onAction={() => api.connect().catch((e: Error) => toast({ title: "Couldn't connect yet", sub: e.message, err: true }))} />
         : <Banner icon="link" title="Wireless Debugging isn't connected" sub="Densify can't change DPI until it is." action="Set up" onAction={() => nav.push({ name: 'setup' })} />)}
       {connected && !state.defaultDpi && <Banner icon="tune" title="Set your default DPI" sub="Densify returns to this value after every game." action="Detect" onAction={detect} />}

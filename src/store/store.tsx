@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../native/api';
 import { bootHooks } from '../logic/axplugin';
-import { DEFAULT_STATE, NO_STRETCH } from './defaults';
+import { AppState as RNAppState } from 'react-native';
+import { DEFAULT_PERF, DEFAULT_STATE } from './defaults';
 import type { AppState, Bundle, Profile } from './types';
 
 export const resolveBundle = (s: AppState, p: Profile): Bundle => s.presets.find((x) => x.id === p.presetId)?.bundle ?? p.bundle;
@@ -18,6 +19,11 @@ function toEngine(s: AppState) {
     bridge: s.bridge,
     mode: s.mode,
     quick: s.quick,
+    hud: s.perf.hud,
+    hudPos: s.perf.pos,
+    hudFields: s.perf.fields,
+    record: s.perf.record,
+    opt: s.perf.opt,
     scripts: [
       ...s.scripts.map((x) => ({ name: x.name, code: x.code, trigger: x.trigger, pkg: x.pkg, on: x.on })),
       ...s.plugins.filter((p) => p.on).flatMap((p) => [...bootHooks(p), ...p.hooks].map((h) => ({ name: p.name, code: h.code, trigger: h.trigger, pkg: h.pkg ?? '', on: true }))),
@@ -33,7 +39,12 @@ function load(): AppState {
     const o = JSON.parse(raw);
     if (o.themeId === 'glass') o.themeId = 'graphite'; // Glass was removed
     if (Array.isArray(o.profiles)) o.profiles = o.profiles.map((p: { stretch?: { on?: boolean; w?: number; h?: number } }) => (p.stretch ? { ...p, stretch: { on: !!p.stretch.on, w: p.stretch.w ?? 0, h: p.stretch.h ?? 0 } } : p)); // old ratio-based stretch is dropped
-    return { ...DEFAULT_STATE, ...o, flags: { ...DEFAULT_STATE.flags, ...(o.flags ?? {}) } };
+    const perf = o.perf ?? {};
+    return {
+      ...DEFAULT_STATE, ...o,
+      flags: { ...DEFAULT_STATE.flags, ...(o.flags ?? {}) },
+      perf: { ...DEFAULT_PERF, ...perf, fields: { ...DEFAULT_PERF.fields, ...(perf.fields ?? {}) }, opt: { ...DEFAULT_PERF.opt, ...(perf.opt ?? {}) } },
+    };
   } catch {
     return DEFAULT_STATE; // corrupted storage: start clean instead of crashing
   }
@@ -45,15 +56,29 @@ export const useStore = () => useContext(C);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(load);
-  const first = useRef(true);
+  const latest = useRef(state);
+  latest.current = state;
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Writing to storage is the costly part of every change, so a burst of changes (a slider drag) is saved once.
+  const flush = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const s = latest.current;
+    api.storageSet('app', JSON.stringify(s));
+    api.storageSet('engine', JSON.stringify(toEngine(s)));
+    api.storageSet('externalApi', s.externalApi ? '1' : '0');
+    api.storageSet('apiToken', s.apiToken);
+    api.setFlags(s.automation, s.restoreOnBoot);
+  }, []);
   useEffect(() => {
-    if (first.current) { first.current = false; }
-    api.storageSet('app', JSON.stringify(state));
-    api.storageSet('engine', JSON.stringify(toEngine(state)));
-    api.storageSet('externalApi', state.externalApi ? '1' : '0');
-    api.storageSet('apiToken', state.apiToken);
-    api.setFlags(state.automation, state.restoreOnBoot);
-  }, [state]);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, 250);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [state, flush]);
+  useEffect(() => {
+    // Never lose the last change: save at once when the app leaves the foreground.
+    const sub = RNAppState.addEventListener('change', (st) => { if (st !== 'active') flush(); });
+    return () => sub.remove();
+  }, [flush]);
   const update = useCallback((fn: (s: AppState) => AppState) => setState(fn), []);
   const log = useCallback((title: string, sub: string, pkg?: string) =>
     setState((s) => ({ ...s, log: [{ id: String(Date.now()), pkg, title, sub, at: Date.now() }, ...s.log].slice(0, 30) })), []);

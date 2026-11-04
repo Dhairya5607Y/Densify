@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { Icon, IconName, T, tap } from './primitives';
@@ -11,8 +10,8 @@ export const hexA = (hex: string, a: number) => {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
-export type Tab = 'home' | 'games' | 'settings';
-const TABS: { k: Tab; label: string; icon: IconName }[] = [{ k: 'home', label: 'Home', icon: 'home' }, { k: 'games', label: 'Games', icon: 'sports-esports' }, { k: 'settings', label: 'Settings', icon: 'tune' }];
+export type Tab = 'home' | 'games' | 'stats' | 'settings';
+const TABS: { k: Tab; label: string; icon: IconName }[] = [{ k: 'home', label: 'Home', icon: 'home' }, { k: 'games', label: 'Games', icon: 'sports-esports' }, { k: 'stats', label: 'Stats', icon: 'insights' }, { k: 'settings', label: 'Settings', icon: 'tune' }];
 
 export function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const t = useTheme();
@@ -22,8 +21,7 @@ export function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   useEffect(() => { Animated.timing(solid, { toValue: dir === 'down' ? 1 : 0, duration: 220, useNativeDriver: true }).start(); }, [dir]);
   return (
     <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom, overflow: 'hidden' }}>
-      <BlurView intensity={35} tint={t.dark ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: hexA(t.c.bg, 0.5) }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: hexA(t.c.bg, 0.86) }]} />
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg, opacity: solid }]} />
       <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.c.bd2 }} />
       <View style={{ flexDirection: 'row', paddingTop: 8, paddingBottom: 8 }}>

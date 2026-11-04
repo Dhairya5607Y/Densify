@@ -5,7 +5,7 @@ import { useStore } from '../store/store';
 import { DEFAULT_STATE } from '../store/defaults';
 import { useTheme } from '../theme/ThemeContext';
 import { useNav } from '../nav';
-import { Btn, Group, Row, Section, Surface, T } from '../ui/primitives';
+import { Btn, Chip, Group, Row, Section, Surface, T } from '../ui/primitives';
 import { useToast } from '../ui/overlays';
 import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
@@ -23,22 +23,35 @@ export function Tools() {
   const { state, update } = useStore();
   const t = useTheme(); const nav = useNav(); const toast = useToast(); const ensure = useEnsure();
   const [cmd, setCmd] = useState('');
-  const [out, setOut] = useState('');
+  const [hist, setHist] = useState<{ cmd: string; text: string; ok: boolean }[]>([]);
   const [busy, setBusy] = useState(false);
   const [cwd, setCwd] = useState('~');
   const [logs, setLogs] = useState<string[]>([]);
   const [restoreText, setRestoreText] = useState('');
-  useEffect(() => { const read = () => setLogs(api.logs().slice(-60).reverse()); read(); const id = setInterval(read, 2000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    let sig = '';
+    const read = () => { const l = api.logs().slice(-60).reverse(); const s = l.length + (l[0] ?? ''); if (s !== sig) { sig = s; setLogs(l); } };
+    read();
+    const id = setInterval(read, 2000);
+    return () => clearInterval(id);
+  }, []);
 
-  const run = async () => {
-    const c = cmd.trim();
+  const run = async (raw?: string) => {
+    const c = (raw ?? cmd).trim();
     if (!c || busy) return;
     if (!(await ensure('shell'))) return;
     setBusy(true);
+    let text = ''; let ok = true;
     try {
-      setOut((await api.session(c)) || '(no output)');
-      setCwd((await api.session('pwd')).trim() || cwd);
-    } catch (e) { setOut(`Error: ${(e as Error).message}`); }
+      text = (await api.session(c)).trim();
+      // Commands like "wm size reset" print nothing when they work, so show the real state afterwards.
+      if (/^\s*wm\s/.test(c)) text = [text, (await api.session('wm size; wm density')).trim()].filter(Boolean).join('\n');
+      if (/^\s*cd(\s|$)/.test(c)) { const wd = (await api.session('pwd')).trim(); if (wd) setCwd(wd); }
+      if (!text) text = 'Done';
+      ok = !/\[exit \d+\]\s*$/.test(text);
+    } catch (e) { text = (e as Error).message; ok = false; }
+    setHist((h) => [{ cmd: c, text, ok }, ...h].slice(0, 12));
+    setCmd('');
     setBusy(false);
   };
   const exportAll = () => Share.share({ message: JSON.stringify({ app: 'densify', v: 1, profiles: state.profiles, presets: state.presets, scripts: state.scripts, quick: state.quick }) }).catch(() => {});
@@ -58,12 +71,20 @@ export function Tools() {
 
       <Section title={`Terminal · ${cwd}`} />
       <Surface pad={14}>
-        <TextInput value={cmd} onChangeText={setCmd} onSubmitEditing={run} placeholder="wm size" placeholderTextColor={t.c.mu} autoCapitalize="none" autoCorrect={false} style={[box, { height: 46 }]} />
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <View style={{ flex: 1 }}><Btn wide v="pri" label={busy ? 'Running…' : 'Run'} disabled={busy} onPress={run} /></View>
-          <Btn v="tonal" label="Clear" onPress={() => setOut('')} /><Btn v="tonal" label="Reset" onPress={() => { api.sessionReset(); setCwd('~'); setOut('Shell reset'); }} />
+        <TextInput value={cmd} onChangeText={setCmd} onSubmitEditing={() => run()} blurOnSubmit={false} returnKeyType="send" placeholder="wm size" placeholderTextColor={t.c.mu} autoCapitalize="none" autoCorrect={false} style={[box, { height: 46 }]} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {['wm size', 'wm size reset', 'wm density', 'wm density reset', 'dumpsys battery'].map((q) => <Chip key={q} h={34} label={q} on={false} onPress={() => run(q)} />)}
         </View>
-        {out ? <T v="sub" c={t.c.tx2} style={{ marginTop: 12, fontFamily: 'monospace', fontSize: 12.5 }}>{out}</T> : null}
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+          <View style={{ flex: 1 }}><Btn wide v="pri" label={busy ? 'Running…' : 'Run'} disabled={busy} onPress={() => run()} /></View>
+          <Btn v="tonal" label="Clear" onPress={() => setHist([])} /><Btn v="tonal" label="Reset" onPress={() => { api.sessionReset(); setCwd('~'); setHist([{ cmd: 'reset', text: 'Shell reset', ok: true }]); }} />
+        </View>
+        {hist.map((h, i) => (
+          <View key={i} style={{ marginTop: 12 }}>
+            <T v="sub" c={t.c.ac} w="600" style={{ fontFamily: 'monospace', fontSize: 12.5 }}>{`$ ${h.cmd}`}</T>
+            <T v="sub" c={h.ok ? t.c.tx2 : t.c.wn} style={{ fontFamily: 'monospace', fontSize: 12.5, marginTop: 2 }}>{h.text}</T>
+          </View>
+        ))}
       </Surface>
 
       <Section title="Activity log" action="Clear" onAction={() => { api.clearLogs(); setLogs([]); }} />

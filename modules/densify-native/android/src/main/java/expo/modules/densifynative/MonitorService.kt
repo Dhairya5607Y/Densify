@@ -23,6 +23,7 @@ class MonitorService : Service() {
   private var floatJob: Job? = null
   private var linkJob: Job? = null
   private var floating: FloatingPanel? = null
+  private var hud: PerfHud? = null
   private var netCb: ConnectivityManager.NetworkCallback? = null
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -34,7 +35,7 @@ class MonitorService : Service() {
         val delta = if (intent.action == ACTION_UP) 10 else -10
         Hub.scope.launch {
           val cur = Hub.adb.readDensity().getOrNull()?.effective ?: return@launch
-          Hub.adb.setDensity((cur + delta).coerceIn(72, 1000))
+          Hub.engine.adjustDpi(cur + delta)
         }
         return START_STICKY
       }
@@ -50,6 +51,7 @@ class MonitorService : Service() {
     }
     watchWifi()
     startLinkKeeper()
+    Perf.start()
     startFloating()
     watcher?.cancel()
     watcher = Hub.scope.launch {
@@ -81,6 +83,7 @@ class MonitorService : Service() {
   /** Shows or hides the floating panel according to the user's setting and what is happening on screen. */
   private fun startFloating() {
     val panel = floating ?: FloatingPanel(this).also { floating = it }
+    val overlay = hud ?: PerfHud(this).also { hud = it }
     floatJob?.cancel()
     floatJob = Hub.scope.launch {
       while (isActive) {
@@ -97,6 +100,9 @@ class MonitorService : Service() {
           if (dismissed != null && dismissed != key) panel.dismissedKey = null
           val canDraw = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this@MonitorService)
           if (wanted && canDraw && (forced || panel.dismissedKey != key)) panel.show(startOpen = forced) else panel.hide()
+          // The live stats readout is separate from the panel, so it can stay on while the panel is closed.
+          val hudWanted = c.hud == "always" || (c.hud == "gaming" && game != null)
+          if (hudWanted && canDraw) { Perf.acquire("hud"); overlay.show(c.hudPos, c.hudFields) } else { Perf.release("hud"); overlay.hide() }
           // If the engine loop ever died, bring it back.
           Hub.engine.ensureRunning()
         }
@@ -131,6 +137,8 @@ class MonitorService : Service() {
     floatJob?.cancel()
     linkJob?.cancel()
     floating?.hide()
+    hud?.hide()
+    Perf.release("hud")
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null
   }
@@ -140,6 +148,7 @@ class MonitorService : Service() {
     floatJob?.cancel()
     linkJob?.cancel()
     floating?.hide()
+    hud?.hide()
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null
     super.onDestroy()

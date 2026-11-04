@@ -10,7 +10,18 @@ export type PluginHook = { trigger: 'start' | 'exit' | 'boot'; code: string; pkg
 export type Plugin = { id: string; name: string; version: string; author: string; desc: string; on: boolean; actions: PluginAction[]; hooks: PluginHook[]; webui?: string; dir?: string; versionCode?: number; boots?: string[]; action?: boolean; webroot?: boolean; hasUninstall?: boolean };
 export type Profile = { pkg: string; name: string; dpi: number; auto: boolean; restore: boolean; presetId: string; bundle: Bundle; stretch?: Stretch };
 export type LogEntry = { id: string; pkg?: string; title: string; sub: string; at: number };
+export type HudField = 'fps' | 'cpu' | 'temp' | 'ram' | 'ping';
+export type HudPos = 'tl' | 'tr' | 'bl' | 'br';
+/** Live stats overlay, session recording and the per-game optimizer. */
+export type PerfCfg = {
+  hud: 'off' | 'gaming' | 'always';
+  pos: HudPos;
+  fields: Record<HudField, boolean>;
+  record: boolean;
+  opt: { ram: boolean; anim: boolean; net: boolean; gameMode: boolean };
+};
 export type AppState = {
+  perf: PerfCfg;
   themeId: string;
   accent: string;
   defaultDpi: number;
@@ -22,7 +33,7 @@ export type AppState = {
   autoReconnect: boolean;
   /** Keep the adb link on a local port so DPI switching keeps working with Wi-Fi off. */
   bridge: boolean;
-  mode: 'wireless' | 'root' | 'tcpip';
+  mode: 'wireless' | 'root' | 'tcpip' | 'shizuku';
   scripts: Script[];
   plugins: Plugin[];
   externalApi: boolean;

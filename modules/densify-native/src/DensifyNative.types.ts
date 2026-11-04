@@ -51,4 +51,14 @@ export interface NativeApi {
   disableBridge(): Promise<boolean>;
   startMonitoring(): boolean;
   stopMonitoring(): boolean;
+  deviceInfo(): Promise<string>;
+  shizukuStatus(): Promise<string>;
+  shizukuRequest(): Promise<string>;
+  shizukuOpen(): boolean;
+  pairManual(port: number, code: string): Promise<boolean>;
+  perfWatch(on: boolean): boolean;
+  perfLive(): string;
+  perfSessions(): string;
+  perfClear(): boolean;
+  optimizeNow(): Promise<string>;
 }

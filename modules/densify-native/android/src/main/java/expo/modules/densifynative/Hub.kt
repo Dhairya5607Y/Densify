@@ -98,7 +98,12 @@ class AdbHub(private val ctx: Context) {
   @Volatile private var lastOk = 0L
 
   private val rootMode: Boolean get() = Hub.engine.config().mode == "root"
-  val isConnected: Boolean get() = if (rootMode) rootOk else up
+  private val shizukuMode: Boolean get() = Hub.engine.config().mode == "shizuku"
+  /** True while commands run through Shizuku instead of adb (chosen mode, or the automatic fallback when adb can't be reached). */
+  @Volatile var viaShizuku = false
+    private set
+  private val useShizuku: Boolean get() = shizukuMode || viaShizuku
+  val isConnected: Boolean get() = if (rootMode) rootOk else if (useShizuku) ShizukuLink.ready else up
   /** Asks the library itself. It takes the manager's lock, so only call it from a background thread. */
   private fun linkAlive(): Boolean = runCatching { mgr.isConnected }.getOrDefault(false)
 
@@ -109,9 +114,16 @@ class AdbHub(private val ctx: Context) {
   suspend fun connect(quiet: Boolean = false): Result<Unit> = lock.withLock {
     withContext(Dispatchers.IO) {
       if (rootMode) return@withContext connectRoot()
+      if (shizukuMode) return@withContext connectShizuku(quiet)
+      if (viaShizuku && ShizukuLink.ready) { _state.value = AdbState("connected"); return@withContext Result.success(Unit) }
       val tcpip = Hub.engine.config().mode == "tcpip"
-      if (!tcpip && Build.VERSION.SDK_INT < 30) return@withContext fail("Wireless Debugging needs Android 11 or newer. On Android 10 and below, use \"From a computer\" in Settings.")
-      if (linkAlive()) { up = true; _state.value = AdbState("connected"); return@withContext Result.success(Unit) }
+      if (!tcpip && Build.VERSION.SDK_INT < 30) {
+        // Android 10 and below has no Wireless Debugging: use a local adb port if one is open, then Shizuku.
+        if (connectLocalPorts()) return@withContext Result.success(Unit)
+        if (ShizukuLink.status(ctx) == ShizukuLink.Status.READY) return@withContext connectShizuku(quiet)
+        return@withContext fail("Wireless Debugging needs Android 11 or newer. On this phone use Shizuku, or \"From a computer\" in Settings.", quiet)
+      }
+      if (linkAlive()) { up = true; viaShizuku = false; _state.value = AdbState("connected"); return@withContext Result.success(Unit) }
       if (!quiet) _state.value = AdbState("connecting")
       try {
         if (tcpip) {
@@ -119,28 +131,78 @@ class AdbHub(private val ctx: Context) {
           val want = Hub.prefs.getString("tcpPort", null)?.trim()?.toIntOrNull()?.takeIf { it in 1024..65535 } ?: 5555
           for (port in listOf(want, 5555, 5556, 5557).distinct()) {
             val ok = runCatching { mgr.connect("127.0.0.1", port) }.getOrDefault(false)
-            if (ok) { up = true; Hub.prefs.edit().putBoolean("paired", true).apply(); _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
+            if (ok) { up = true; viaShizuku = false; Hub.prefs.edit().putBoolean("paired", true).apply(); _state.value = AdbState("connected"); Hub.log("Connected over adb tcpip (port $port)"); return@withContext Result.success(Unit) }
           }
+          if (ShizukuLink.status(ctx) == ShizukuLink.Status.READY) return@withContext connectShizuku(quiet)
           return@withContext fail("Couldn't reach adb on port $want. On your computer run: adb tcpip $want", quiet)
         }
         // With the bridge on, the local port works even when Wi-Fi is off, so try it first.
         if (Hub.engine.config().bridge && connectLoopback()) {
-          up = true; viaBridge = true; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply()
+          up = true; viaBridge = true; viaShizuku = false; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply()
           Hub.log("Connected over the local adb port"); return@withContext Result.success(Unit)
         }
         // Wireless Debugging picks a new port whenever it is toggled, so look it up again and retry once before giving up.
-        for (attempt in 1..2) {
-          val ok = try { mgr.connectTls(ctx, 8_000) } catch (e: Throwable) {
+        // Three tries: the second and third get more time, and the second restarts Wireless Debugging's announcement first,
+        // because some ROMs (OxygenOS, ColorOS, MIUI) stop announcing the connect service after Wi-Fi changes.
+        for (attempt in 1..3) {
+          val ok = try { mgr.connectTls(ctx, if (attempt == 1) 8_000L else 12_000L) } catch (e: Throwable) {
             // Only a real "not paired" answer means setup has to be done again.
             if (e.javaClass.simpleName == "AdbPairingRequiredException") Hub.prefs.edit().putBoolean("paired", false).apply()
             false
           }
-          if (ok) { up = true; viaBridge = false; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply(); Hub.log("Connected over Wireless Debugging"); return@withContext Result.success(Unit) }
-          if (attempt == 1) kotlinx.coroutines.delay(600)
+          if (ok) { up = true; viaBridge = false; viaShizuku = false; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply(); Hub.log("Connected over Wireless Debugging"); return@withContext Result.success(Unit) }
+          if (attempt == 1) kotlinx.coroutines.delay(600) else if (attempt == 2) recycleWirelessDebugging()
         }
-        fail("Couldn't reach Wireless Debugging. Turn it on and make sure you're on Wi-Fi.", quiet)
+        // Some ROMs never announce the connect service at all. It can still be reached on the port the system reports.
+        val tlsPort = DeviceInfo.fresh("service.adb.tls.port").toIntOrNull()
+        if (tlsPort != null && tlsPort in 1024..65535 && runCatching { mgr.connect("127.0.0.1", tlsPort) }.getOrDefault(false)) {
+          up = true; viaBridge = false; viaShizuku = false; _state.value = AdbState("connected"); Hub.prefs.edit().putBoolean("paired", true).apply()
+          Hub.log("Connected over Wireless Debugging (port $tlsPort)"); return@withContext Result.success(Unit)
+        }
+        // Shizuku needs no pairing and no Wi-Fi, so it is the safety net when Wireless Debugging can't be reached.
+        if (ShizukuLink.status(ctx) == ShizukuLink.Status.READY) { Hub.log("Wireless Debugging unreachable. Using Shizuku instead."); return@withContext connectShizuku(quiet) }
+        fail("Couldn't reach Wireless Debugging. Turn it on and make sure you're on Wi-Fi." + DeviceInfo.hint(), quiet)
       } catch (t: Throwable) { fail(t.message ?: "Connection failed.", quiet) }
     }
+  }
+
+  /** Links through Shizuku: shell rights without adb, pairing or Wi-Fi. */
+  private fun connectShizuku(quiet: Boolean): Result<Unit> {
+    if (!quiet) _state.value = AdbState("connecting")
+    val st = ShizukuLink.status(ctx)
+    if (st != ShizukuLink.Status.READY) {
+      viaShizuku = false
+      return fail(ShizukuLink.explain(st), quiet)
+    }
+    viaShizuku = true; up = false
+    _state.value = AdbState("connected")
+    Hub.prefs.edit().putBoolean("paired", true).apply()
+    Hub.log("Connected through Shizuku")
+    // With shell rights Densify can give itself the permissions Wireless Debugging setup would have granted.
+    if (ctx.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED) Hub.scope.launch { grantSelf() }
+    return Result.success(Unit)
+  }
+
+  /** Looks for an adb port already open on this phone (from `adb tcpip`). */
+  private fun connectLocalPorts(): Boolean {
+    val want = Hub.prefs.getString("tcpPort", null)?.trim()?.toIntOrNull()?.takeIf { it in 1024..65535 } ?: 5555
+    for (port in listOf(want, 5555, 5556, 5557).distinct()) {
+      if (runCatching { mgr.connect("127.0.0.1", port) }.getOrDefault(false)) {
+        up = true; viaShizuku = false; Hub.prefs.edit().putBoolean("paired", true).apply(); _state.value = AdbState("connected")
+        Hub.log("Connected over adb tcpip (port $port)")
+        return true
+      }
+    }
+    return false
+  }
+
+  /** Switches Wireless Debugging off and on so the phone announces itself again. Only possible once Densify holds the secure-settings permission. */
+  private suspend fun recycleWirelessDebugging() {
+    if (ctx.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+    runCatching { Settings.Global.putInt(ctx.contentResolver, "adb_wifi_enabled", 0) }
+    kotlinx.coroutines.delay(900)
+    runCatching { Settings.Global.putInt(ctx.contentResolver, "adb_wifi_enabled", 1) }
+    kotlinx.coroutines.delay(2_200)
   }
 
   private fun connectRoot(): Result<Unit> {
@@ -214,6 +276,7 @@ class AdbHub(private val ctx: Context) {
    */
   suspend fun keepAlive(autoReconnect: Boolean) {
     if (rootMode) return
+    if (useShizuku) { if (!ShizukuLink.ready) connect(quiet = true); return }
     val cfg = Hub.engine.config()
     if (!up) {
       if (!autoReconnect) return
@@ -276,6 +339,7 @@ class AdbHub(private val ctx: Context) {
 
   private suspend fun run(cmd: String): Result<String> {
     if (rootMode) return withContext(Dispatchers.IO) { runRoot(cmd) }
+    if (useShizuku) return withContext(Dispatchers.IO) { runCatching { ShizukuLink.exec(cmd) } }
     // Blocking socket work runs on its own thread so a dead link can never freeze the caller: after 20 s we give up and report it.
     val job = Hub.scope.async(Dispatchers.IO) {
       runCatching { mgr.openStream("shell:$cmd").use { readAll(it) } }
@@ -312,6 +376,7 @@ class AdbHub(private val ctx: Context) {
   suspend fun openProcess(cmd: String?): Result<ProcLike> = withContext(Dispatchers.IO) {
     runCatching {
       if (!isConnected) connect(quiet = true).getOrThrow()
+      if (useShizuku) return@runCatching ShizukuLink.start(if (cmd == null) arrayOf("sh") else arrayOf("sh", "-c", cmd))
       if (rootMode) {
         val p = (if (cmd == null) ProcessBuilder("su") else ProcessBuilder("su", "-c", cmd)).redirectErrorStream(true).start()
         ProcLike(p.inputStream, p.outputStream, { p.destroy() }, { p.exitValue() })
@@ -358,18 +423,26 @@ class AdbHub(private val ctx: Context) {
   suspend fun sessionExec(cmd: String, timeoutMs: Long = 60_000): Result<String> = sessLock.withLock {
     withContext(Dispatchers.IO) {
       runCatching {
-        val s = ensureSession()
         val a = (100..499).random(); val b = (100..499).random()
         val line = "$cmd\n__rc=\$?; echo __DNSY_\$(($a+$b))_\$__rc\n"
-        try { s.output.write(line.toByteArray()); s.output.flush() } catch (t: Throwable) { resetSession(); throw t }
+        // A shell that died while idle is replaced once, before the command is sent, so the command never runs twice.
+        var s = ensureSession()
+        val sent = runCatching { s.output.write(line.toByteArray()); s.output.flush() }
+        if (sent.isFailure) {
+          resetSession()
+          s = ensureSession()
+          try { s.output.write(line.toByteArray()); s.output.flush() } catch (t: Throwable) { resetSession(); throw t }
+        }
         // A watchdog closes the stream on timeout, which unblocks the read below.
         val dog = Hub.scope.launch { kotlinx.coroutines.delay(timeoutMs); s.destroy() }
-        try { readUntil(s, "__DNSY_${a + b}_", timeoutMs + 2_000).first } catch (t: Throwable) { resetSession(); throw t } finally { dog.cancel() }
+        val res = try { readUntil(s, "__DNSY_${a + b}_", timeoutMs + 2_000) } catch (t: Throwable) { resetSession(); throw t } finally { dog.cancel() }
+        // Most commands (wm size reset, settings put) print nothing when they work, so report a failing exit code instead of silence.
+        if (res.second != 0) (if (res.first.isEmpty()) "" else res.first + "\n") + "[exit ${res.second}]" else res.first
       }
     }
   }
 
-  fun disconnect() { resetSession(); up = false; runCatching { mgr.disconnect() }; rootOk = false; _state.value = AdbState("disconnected") }
+  fun disconnect() { resetSession(); up = false; viaShizuku = false; runCatching { mgr.disconnect() }; rootOk = false; _state.value = AdbState("disconnected") }
 
   suspend fun readDensity(): Result<Density> = exec("wm density").mapCatching { out ->
     val phys = Regex("Physical density:\\s*(\\d+)").find(out)?.groupValues?.get(1)?.toInt() ?: error("Couldn't read the current DPI.")

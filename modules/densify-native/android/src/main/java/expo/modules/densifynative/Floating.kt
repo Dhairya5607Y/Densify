@@ -23,11 +23,15 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 
 /**
- * A draggable bubble that expands into a small control panel, drawn over the game.
- * Built from plain Views. Sizes are in "physical dp" so the panel keeps its size when Densify changes the screen density.
+ * A draggable bubble that expands into a control panel, drawn over the game: live FPS / CPU / temperature / RAM / ping,
+ * DPI steps, quick values, stretch resolution and one-tap optimize. Built from plain Views.
+ * Sizes are in "physical dp" so the panel keeps its size when Densify changes the screen density.
  */
 class FloatingPanel(private val ctx: Context) {
   private val wm: WindowManager = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -38,36 +42,53 @@ class FloatingPanel(private val ctx: Context) {
   private var bubble: ImageView? = null
   private var panel: LinearLayout? = null
   private var valueLabel: TextView? = null
+  private val stats = HashMap<String, TextView>()
   private var scale = 1f
   private var expanded = false
+
+  /** The DPI the user has tapped to but that has not been applied yet. While set, the label shows it and nothing overwrites it. */
+  @Volatile private var pending: Int? = null
+  private val busy = AtomicBoolean(false)
 
   /** The game (or "always") the user dismissed the panel for. The service skips showing it again until that changes. */
   @Volatile var dismissedKey: String? = null
   @Volatile var visible = false
     private set
 
+  private val ticker = object : Runnable {
+    override fun run() {
+      if (!visible || !expanded) return
+      updateStats()
+      syncValue()
+      main.postDelayed(this, 1_000L)
+    }
+  }
+
   fun show(startOpen: Boolean = false) {
     main.post {
-      if (visible) { refreshLabels(); return@post }
+      if (visible) { syncValue(); return@post }
       val canDraw = Build.VERSION.SDK_INT < 23 || runCatching { android.provider.Settings.canDrawOverlays(ctx) }.getOrDefault(false)
       if (!canDraw) return@post
       build()
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
-      if (startOpen) { expanded = true; panel?.visibility = View.VISIBLE }
-      refreshLabels()
+      if (startOpen) setExpanded(true)
+      syncValue()
     }
   }
 
   fun hide() {
     main.post {
       if (!visible) return@post
+      main.removeCallbacks(ticker)
+      Perf.release("panel")
+      root?.let { r -> runCatching { imm.hideSoftInputFromWindow(r.windowToken, 0) } }
       root?.let { v -> runCatching { wm.removeView(v) } }
       visible = false
       expanded = false
-      root?.let { r -> runCatching { imm.hideSoftInputFromWindow(r.windowToken, 0) } }
       root = null; panel = null; bubble = null; valueLabel = null; quickA = null; quickB = null; sizeIn = null; sizeStatus = null
+      stats.clear()
     }
   }
 
@@ -96,9 +117,9 @@ class FloatingPanel(private val ctx: Context) {
     if (strokeDp > 0f) setStroke(px(strokeDp).coerceAtLeast(1), stroke)
   }
 
-  private fun button(text: String, onClick: () -> Unit): TextView = label(text, 14f, Color.WHITE, true).apply {
-    background = shape(Color.parseColor("#2B3138"), 10f)
-    setPadding(px(6f), px(10f), px(6f), px(10f))
+  private fun button(text: String, tint: String, sizeDp: Float = 14f, onClick: () -> Unit): TextView = label(text, sizeDp, Color.WHITE, true).apply {
+    background = shape(Color.parseColor(tint), 12f)
+    setPadding(px(6f), px(12f), px(6f), px(12f))
     setOnClickListener { onClick() }
   }
 
@@ -134,19 +155,39 @@ class FloatingPanel(private val ctx: Context) {
   private fun box(vararg kids: View): LinearLayout = LinearLayout(ctx).apply {
     orientation = LinearLayout.HORIZONTAL
     gravity = Gravity.CENTER_VERTICAL
-    background = shape(Color.parseColor("#1B2026"), 10f, 1f, Color.parseColor("#3A424B"))
+    background = shape(Color.parseColor("#10151B"), 12f, 1f, Color.parseColor("#2A333D"))
     kids.forEachIndexed { i, k ->
       if (i == 0) addView(k, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)) else addView(k)
     }
   }
 
+  private fun card(): LinearLayout = LinearLayout(ctx).apply {
+    orientation = LinearLayout.VERTICAL
+    background = shape(Color.parseColor("#141A21"), 16f)
+    setPadding(px(12f), px(11f), px(12f), px(12f))
+  }
+
+  private fun statCell(key: String, caption: String): LinearLayout {
+    val v = label("–", 15f, Color.WHITE, true)
+    stats[key] = v
+    return LinearLayout(ctx).apply {
+      orientation = LinearLayout.VERTICAL
+      gravity = Gravity.CENTER
+      background = shape(Color.parseColor("#141A21"), 12f)
+      setPadding(px(2f), px(8f), px(2f), px(7f))
+      addView(v)
+      addView(label(caption, 8.5f, Color.parseColor("#7E8791"), true))
+    }
+  }
+
   private fun build() {
     scale = physDensity()
+    stats.clear()
     val ac = Color.parseColor("#5CBDFF")
     val dim = Color.parseColor("#8B939E")
     val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.START }
 
-    // The bubble is the Densify logo. The density value lives in the panel it opens.
+    // The bubble is the Densify logo. Everything else lives in the panel it opens.
     val b = ImageView(ctx).apply {
       setImageResource(ctx.resources.getIdentifier("densify_logo", "drawable", ctx.packageName))
       scaleType = ImageView.ScaleType.CENTER_CROP
@@ -159,24 +200,39 @@ class FloatingPanel(private val ctx: Context) {
       isClickable = true
     }
     bubble = b
-    attachDrag(b)
+    attachDrag(b, true)
     col.addView(b)
 
     val pn = LinearLayout(ctx).apply {
       orientation = LinearLayout.VERTICAL
-      background = shape(Color.parseColor("#F2101418"), 18f, 1f, Color.parseColor("#3A424B"))
-      setPadding(px(12f), px(12f), px(12f), px(12f))
+      background = shape(Color.parseColor("#F00A0E13"), 22f, 1f, Color.parseColor("#2A333D"))
+      setPadding(px(12f), px(10f), px(12f), px(12f))
       visibility = View.GONE
     }
-    pn.layoutParams = LinearLayout.LayoutParams(px(236f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f) }
+    pn.layoutParams = LinearLayout.LayoutParams(px(268f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f) }
     panel = pn
 
+    // Header: drag handle with the app name and Hide
+    val header = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    header.addView(label("DENSIFY", 11f, ac, true).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; letterSpacing = 0.14f }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+    header.addView(label("Hide", 12.5f, dim, true).apply {
+      setPadding(px(12f), px(8f), px(4f), px(8f))
+      setOnClickListener { dismissedKey = Hub.engine.state.value.activePkg ?: "always"; Hub.floatForceUntil = 0L; hide() }
+    })
+    attachDrag(header, false)
+    pn.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(8f) })
+
+    // Live numbers
+    pn.addView(row(listOf(statCell("fps", "FPS"), statCell("cpu", "CPU"), statCell("temp", "TEMP"), statCell("ram", "RAM"), statCell("ping", "PING")), 5f))
+
     // Density: value and two step buttons
-    pn.addView(label("DENSITY", 10.5f, dim, true))
-    val v = label(currentText(), 30f, Color.WHITE, true)
+    val dc = card()
+    dc.addView(label("DENSITY", 10f, dim, true).apply { letterSpacing = 0.12f })
+    val v = label(currentText(), 38f, Color.WHITE, true)
     valueLabel = v
-    pn.addView(v, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(2f); bottomMargin = px(8f) })
-    pn.addView(row(listOf(button("-5") { change(-5) }, button("+5") { change(5) })))
+    dc.addView(v, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(2f); bottomMargin = px(10f) })
+    dc.addView(row(listOf(button("−5", "#26303B", 18f) { change(-5) }, button("+5", "#1E3A52", 18f) { change(5) })))
+    pn.addView(dc, rowParams())
 
     // Two quick values, typable. Done (or Set) applies the value and remembers it.
     val qa = field("DPI", quickValue(1).toString(), { applyQuick(1) }, true).also { quickA = it }
@@ -186,19 +242,20 @@ class FloatingPanel(private val ctx: Context) {
     pn.addView(row(listOf(box(qa, sa), box(qb, sb))), rowParams())
 
     // Stretch resolution, typed as W*H
-    pn.addView(label("STRETCH RESOLUTION", 10.5f, dim, true).apply { setPadding(0, px(14f), 0, px(4f)) })
+    val sc = card()
+    sc.addView(label("STRETCH RESOLUTION", 10f, dim, true).apply { letterSpacing = 0.12f; setPadding(0, 0, 0, px(6f)) })
     val size = field("2160*1080", savedSizeText(), { applySize() }, false).also { sizeIn = it }
-    pn.addView(box(size), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-    pn.addView(row(listOf(button("Stretch") { applySize() }, button("Reset") { resetSize() })), rowParams())
+    sc.addView(box(size), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+    sc.addView(row(listOf(button("Stretch", "#1E3A52") { applySize() }, button("Reset", "#26303B") { resetSize() })), rowParams())
     val ss = label("", 11f, dim).apply { setPadding(0, px(6f), 0, 0) }
     sizeStatus = ss
-    pn.addView(ss)
+    sc.addView(ss)
+    pn.addView(sc, rowParams())
 
-    val bottom = row(listOf(
-      label("Restore all", 12.5f, ac, true).apply { setPadding(0, px(10f), 0, px(2f)); setOnClickListener { touched(); Hub.scope.launch { Hub.engine.restoreAll(); main.post { refreshLabels() } } } },
-      label("Hide", 12.5f, dim, true).apply { setPadding(0, px(10f), 0, px(2f)); setOnClickListener { dismissedKey = Hub.engine.state.value.activePkg ?: "always"; Hub.floatForceUntil = 0L; hide() } },
-    ))
-    pn.addView(bottom)
+    pn.addView(row(listOf(
+      button("Optimize", "#1E3A52") { optimize() },
+      button("Restore all", "#26303B") { touched(); Hub.scope.launch { Hub.engine.restoreAll(); pending = null; main.post { refreshLabels() } } },
+    )), rowParams())
     col.addView(pn)
 
     root = col
@@ -221,14 +278,14 @@ class FloatingPanel(private val ctx: Context) {
 
   private fun rowParams() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f) }
 
-  private fun row(items: List<View>): LinearLayout = LinearLayout(ctx).apply {
+  private fun row(items: List<View>, gapDp: Float = 6f): LinearLayout = LinearLayout(ctx).apply {
     orientation = LinearLayout.HORIZONTAL
     items.forEachIndexed { i, tv ->
-      addView(tv, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = px(6f) })
+      addView(tv, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = px(gapDp) })
     }
   }
 
-  /** Falls back to the current system density so the bubble never shows a placeholder word. */
+  /** The engine now knows about every manual change, so its value is the truth. Falls back to the system density. */
   private fun currentText(): String = (Hub.engine.state.value.appliedDpi ?: ctx.resources.displayMetrics.densityDpi).toString()
 
   private fun quickValue(i: Int): Int {
@@ -245,16 +302,37 @@ class FloatingPanel(private val ctx: Context) {
     return if (w > 0 && h > 0) "$w*$h" else ""
   }
 
-  private fun refreshLabels() {
+  /** Cheap: only copies what the engine already knows. Never talks to the phone and never overrides a tap in progress. */
+  private fun syncValue() {
+    if (pending != null) return
     val t = currentText()
-    valueLabel?.text = t
-    if (panel?.visibility == View.VISIBLE) {
-      Hub.scope.launch {
-        val z = Hub.adb.readSize().getOrNull()
-        val txt = if (z == null) "" else if (z.overrideText != null) "Now ${z.ovrW}×${z.ovrH}  (screen ${z.physW}×${z.physH})" else "Now ${z.physW}×${z.physH} (normal)"
-        main.post { sizeStatus?.text = txt }
-      }
+    if (valueLabel?.text?.toString() != t) valueLabel?.text = t
+  }
+
+  private fun updateStats() {
+    val s = Perf.latest
+    stats["fps"]?.text = if (s.fps >= 0) s.fps.toString() else "–"
+    stats["cpu"]?.text = if (s.cpu >= 0) "${s.cpu}%" else "–"
+    stats["temp"]?.let { tv ->
+      tv.text = if (s.tempC > 0f) "${s.tempC.roundToInt()}°" else "–"
+      tv.setTextColor(Color.parseColor(if (s.tempC >= 48f) "#FF7A7A" else if (s.tempC >= 42f) "#FFC27A" else "#FFFFFF"))
     }
+    stats["ram"]?.text = if (s.ramPct >= 0) "${s.ramPct}%" else "–"
+    stats["ping"]?.text = if (s.pingMs >= 0) s.pingMs.toString() else "–"
+  }
+
+  /** Reads the screen size once (when the panel opens or after a size change), not on a timer. */
+  private fun loadSize() {
+    Hub.scope.launch {
+      val z = Hub.adb.readSize().getOrNull()
+      val txt = if (z == null) "" else if (z.overrideText != null) "Now ${z.ovrW}×${z.ovrH}  (screen ${z.physW}×${z.physH})" else "Now ${z.physW}×${z.physH} (normal)"
+      main.post { sizeStatus?.text = txt }
+    }
+  }
+
+  private fun refreshLabels() {
+    syncValue()
+    if (expanded) loadSize()
   }
 
   // ---------- actions ----------
@@ -281,11 +359,32 @@ class FloatingPanel(private val ctx: Context) {
 
   private fun toast(msg: String) { main.post { sizeStatus?.text = msg } }
 
+  /**
+   * +5 / -5. The number changes the instant it is tapped and quick taps are merged into one change, so it never lags or fights itself.
+   * The change goes through the engine, which keeps every screen (and the game profile) in agreement.
+   */
   private fun change(delta: Int) {
     touched()
+    val base = pending ?: Hub.engine.state.value.appliedDpi ?: ctx.resources.displayMetrics.densityDpi
+    val next = (base + delta).coerceIn(72, 1000)
+    pending = next
+    valueLabel?.text = next.toString()
+    if (!busy.compareAndSet(false, true)) return
     Hub.scope.launch {
-      val cur = Hub.adb.readDensity().getOrNull()?.effective ?: return@launch
-      applyDpi((cur + delta).coerceIn(72, 1000))
+      try {
+        while (true) {
+          delay(140)
+          val target = pending ?: break
+          val r = Hub.engine.adjustDpi(target)
+          if (pending == target) pending = null
+          main.post {
+            if (r.isSuccess) { if (pending == null) valueLabel?.text = target.toString() }
+            else { pending = null; valueLabel?.text = currentText(); sizeStatus?.text = "Couldn't set DPI. Check connection." }
+          }
+          if (pending == null) break
+        }
+      } finally { busy.set(false) }
+      if (pending != null) main.post { change(0) }
     }
   }
 
@@ -296,15 +395,13 @@ class FloatingPanel(private val ctx: Context) {
     if (v == null || v !in 72..1000) { toast("DPI must be 72 to 1000"); return }
     Hub.prefs.edit().putInt("floatQuick$i", v).apply()
     endTyping()
-    Hub.scope.launch { applyDpi(v) }
-  }
-
-  private suspend fun applyDpi(dpi: Int) {
-    val r = Hub.adb.setDensity(dpi)
-    if (r.isSuccess) {
-      Hub.log("Floating panel set $dpi DPI")
-      main.post { valueLabel?.text = dpi.toString() }
-    } else toast("Couldn't set DPI. Check connection.")
+    pending = v
+    valueLabel?.text = v.toString()
+    Hub.scope.launch {
+      val r = Hub.engine.adjustDpi(v)
+      if (pending == v) pending = null
+      main.post { if (r.isFailure) { valueLabel?.text = currentText(); sizeStatus?.text = "Couldn't set DPI. Check connection." } }
+    }
   }
 
   private fun applySize() {
@@ -323,10 +420,39 @@ class FloatingPanel(private val ctx: Context) {
     Hub.scope.launch { Hub.engine.unstretch(); main.post { refreshLabels() } }
   }
 
+  private fun optimize() {
+    touched()
+    toast("Cleaning RAM…")
+    Hub.scope.launch {
+      val msg = runCatching { Hub.engine.optimizeNow() }.getOrDefault("Couldn't reach the phone.")
+      toast(msg)
+    }
+  }
+
+  private fun setExpanded(on: Boolean) {
+    expanded = on
+    panel?.visibility = if (on) View.VISIBLE else View.GONE
+    if (on) {
+      Perf.start()
+      Perf.acquire("panel")
+      updateStats()
+      loadSize()
+      main.removeCallbacks(ticker)
+      main.postDelayed(ticker, 1_000L)
+    } else {
+      Perf.release("panel")
+      main.removeCallbacks(ticker)
+      endTyping()
+    }
+    val p = lp
+    val r = root
+    if (p != null && r != null) runCatching { wm.updateViewLayout(r, p) }
+  }
+
   // ---------- dragging ----------
 
   @SuppressLint("ClickableViewAccessibility")
-  private fun attachDrag(v: View) {
+  private fun attachDrag(v: View, toggleOnTap: Boolean) {
     val slop = ViewConfiguration.get(ctx).scaledTouchSlop
     var startX = 0; var startY = 0; var touchX = 0f; var touchY = 0f; var moved = false
     v.setOnTouchListener { _, e ->
@@ -346,7 +472,7 @@ class FloatingPanel(private val ctx: Context) {
         }
         MotionEvent.ACTION_UP -> {
           touched()
-          if (moved) Hub.prefs.edit().putInt("floatX", p.x).putInt("floatY", p.y).apply() else toggle()
+          if (moved) Hub.prefs.edit().putInt("floatX", p.x).putInt("floatY", p.y).apply() else if (toggleOnTap) toggle()
           true
         }
         else -> false
@@ -355,12 +481,7 @@ class FloatingPanel(private val ctx: Context) {
   }
 
   private fun toggle() {
-    expanded = !expanded
-    if (!expanded) endTyping()
-    panel?.visibility = if (expanded) View.VISIBLE else View.GONE
-    refreshLabels()
-    val p = lp
-    val r = root
-    if (p != null && r != null) runCatching { wm.updateViewLayout(r, p) }
+    setExpanded(!expanded)
+    syncValue()
   }
 }

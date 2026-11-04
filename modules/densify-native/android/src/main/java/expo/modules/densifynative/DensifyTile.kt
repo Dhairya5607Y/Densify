@@ -14,7 +14,7 @@ class DensifyTile : TileService() {
       if (q.isEmpty()) return@launch
       val cur = Hub.adb.readDensity().getOrNull()?.effective
       val next = q.firstOrNull { it > (cur ?: 0) } ?: q.first()
-      val r = Hub.adb.setDensity(next)
+      val r = Hub.engine.adjustDpi(next)
       refresh(if (r.isSuccess) next else null)
     }
   }
