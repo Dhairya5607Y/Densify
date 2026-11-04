@@ -1,33 +1,141 @@
-# Densify (alpha)
+<div align="center">
 
-Per-game display density automation with on-device Wireless Debugging. No root, no Shizuku, no PC after setup.
+<img src="docs/images/banner.png" alt="Densify" width="100%">
 
-- **App:** Expo (React Native, TypeScript). Seven design-language themes (Matte, Graphite, Manga, Material You, HUD, Paper, Ember).
-- **Native engine:** local Expo module `modules/densify-native` (Kotlin): on-device ADB, foreground service, Quick Settings tile, notification controls.
-- **No hardcoded games:** the list comes from the phone's installed apps (launcher activities, `CATEGORY_GAME`). No game or package names exist anywhere in the source.
-- **Storage:** all settings, profiles, presets and quick values persist on the device (SharedPreferences through the native module).
+**Per-game display density, live performance stats and a one-tap optimizer for Android.**
+Open a game and Densify switches your DPI. Close it and everything goes back.
 
-## Get an APK (EAS)
-1. Push this folder to a GitHub repo.
-2. `npm install -g eas-cli && eas login`
-3. `eas init` (creates the Expo project and links `extra.eas.projectId`), then connect the GitHub repo on expo.dev.
-4. `eas build -p android --profile preview` → downloads an installable `.apk`.
+![Android](https://img.shields.io/badge/Android-7%2B-3DDC84?logo=android&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)
+![Kotlin](https://img.shields.io/badge/Kotlin-native%20module-7F52FF?logo=kotlin&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-(Or tell Claude your `@owner/densify` app name once the repo is connected and it can start the build and fetch the link.)
+</div>
 
-## Preview the UI on a computer
-`npm install && npx expo start --web` (no device data, but every theme and screen renders).
+<br>
 
-## First run on the phone
-1. Install the APK, open Densify, switch on **Automatic switching**: it asks for notifications, usage access and Wireless Debugging as needed.
-2. Setup page: turn on Wireless Debugging, tap Start setup, enter the pairing code in the notification.
-3. Settings → Detect current DPI, then add a game and save a profile.
+<img src="docs/images/screens.png" alt="Home, Games, Stats and Settings screens" width="100%">
 
-## Not in this alpha (removed from the UI rather than faked)
-Touch guard, break reminder, charger-aware presets, automation intents.
+<sub>Screens are the app's own UI rendered with sample data.</sub>
 
-## New in 1.1
-Floating panel over games (−5 / +5, two typable quick DPI values, typable stretch resolution), a Stretch resolution card on Home (typed as width*height, e.g. 2160*1080), per-game stretch, automation scripts (game start / exit / boot), terminal, activity log, backup and restore, root mode, Wi-Fi auto-reconnect, Graphite and Manga themes (Glass removed), plugins (AxManager/KernelSU-style zip modules with module.prop, customize.sh, boot scripts, action.sh and webroot WebUI; or small JSON plugins), developer tweaks, power menu, settings editor, external broadcast API, a bindable service with per-app approval, BusyBox and resetprop for plugins, crash screen, a real persistent shell session, Shizuku-protocol service (apps that use the Shizuku API can run shell commands through Densify after you approve them), KernelSU WebUI API (exec, spawn, packages), accent colour picker, plugin search, and "From a computer" (adb tcpip) mode for Android 10 and below. Works on Android 7 (API 24) and newer; Wireless Debugging itself needs Android 11+, older versions use the computer method once per boot.
+## What it does
 
-## Unverified
-The Kotlin module has not been compiled yet. The likeliest first-build errors are `libadb-android` API names (`connectTls`, `pair`, `openStream`) and the `sun.security.x509` imports. Send the EAS build log and they get fixed.
+Densify watches which app is in front. When a game from your list opens, it applies that game's profile (DPI, screen size, refresh rate and more). When you leave, it puts your phone back exactly how it was, even if the app was killed in between.
+
+It talks to Android through a local `adb` link that lives on the phone itself, so no computer is needed.
+
+## Features
+
+### Per-game profiles
+- Own DPI for every game, applied on launch and restored on exit
+- Presets (Esport, Balanced, Battery saver, Cinematic) that bundle refresh rate, Do Not Disturb, rotation, brightness and keep-awake
+- Stretch resolution: type `2160*1080` or pick a ratio, per game or globally
+- Your original values are saved as a snapshot, so a crash never leaves the screen stuck at the wrong density
+
+### Live stats
+<img src="docs/images/overlay.png" alt="Live stats overlay" width="100%">
+
+- **FPS, CPU load, temperature, RAM and ping** shown live
+- A click-through overlay in the corner you choose, with the numbers you choose: always, or only in games
+- A dedicated **Stats** tab with live tiles, a one-minute FPS graph and **per-session averages** (average FPS, 1% low, min/max, CPU, average and peak temperature, RAM, ping)
+- Sampling only runs while something is showing it, so the monitor costs nothing the rest of the time
+
+### Floating panel
+<p align="center"><img src="docs/images/floating-panel.png" alt="Floating panel" width="46%"></p>
+
+- Draggable bubble that opens over any game
+- Five live stat tiles, big **−5 / +5** density buttons, two typable quick values
+- Stretch resolution, **Optimize** and **Restore all** in one place
+- Manual DPI changes hold for a few seconds so the engine never snaps them back
+
+### Optimizer
+Per-game and fully reversible. Each switch is undone when the game closes.
+- Clear background RAM before launch
+- Faster animation scale
+- Low-latency Wi-Fi mode and no background scans
+- Game Mode performance hint
+
+### Terminal
+- A built-in shell for `wm size`, `wm density` and anything else you would run over adb
+- Exit codes are shown, the shell recovers if it dies, and the current screen state is read back after every `wm` command
+- History and one-tap chips for common commands
+
+### Connection
+<img src="docs/images/connection.png" alt="Connection methods" width="100%">
+
+Densify reads your phone model, Android version and ROM (OxygenOS, ColorOS, realme UI, HyperOS, MIUI, One UI and others), recommends the method that works best on it, and falls back by itself:
+
+| Method | Notes |
+| --- | --- |
+| Wireless Debugging | Android 11+. Pair once; reconnects by itself. Retries and recycles the setting when a ROM is slow to respond. Manual port and code pairing is available. |
+| Shizuku | If Shizuku is running, Densify gets its shell link through it with no pairing code and no Wi-Fi. |
+| adb tcpip | For Android 10 and below, set up once from a computer. |
+| Root | Optional. Runs the same commands through `su`. |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Foreground app<br/>UsageStats] --> B{Engine}
+    B -->|game opened| C[Apply profile<br/>and optimizer]
+    B -->|game closed| D[Restore snapshot]
+    C --> E[Local adb link<br/>Wireless Debugging / tcpip]
+    C --> F[Shizuku]
+    C --> G[Root]
+    D --> E
+    E --> H[wm density / wm size<br/>settings / cmd]
+    F --> H
+    G --> H
+    B --> I[Perf sampler]
+    I --> J[Stats tab, overlay,<br/>floating panel]
+```
+
+## Compatibility
+
+- Android 7 (API 24) and newer
+- Wireless Debugging needs Android 11 or newer; older versions use Shizuku, root or adb tcpip
+- Shizuku and root are optional
+- Some phones do not expose every number. A value the phone hides shows as a dash instead of a guess
+
+## Privacy
+
+Everything runs on the device. Densify has the `INTERNET` permission for one reason: the ping reading sends a single small probe to `8.8.8.8`. No accounts, no analytics, no data leaves the phone.
+
+## Tech stack
+
+| Layer | Tech |
+| --- | --- |
+| App | Expo SDK 57, React Native 0.86, React 19, TypeScript |
+| Native | Local Expo module in Kotlin (`modules/densify-native`) |
+| ADB | [libadb-android](https://github.com/MuntashirAkon/libadb-android) with Conscrypt for TLS |
+| Shizuku | Raw binder client, no extra library |
+| Overlays | `TYPE_APPLICATION_OVERLAY` windows built from plain Views |
+| Builds | EAS Build |
+
+## Project structure
+
+```
+App.tsx                      app shell and tab routing
+src/
+  screens/                   Home, Games, Stats, Settings, Setup, Tools, Profile ...
+  logic/                     hooks, permissions, perf sampling
+  native/api.ts              typed wrapper over the native module
+  store/                     app state, defaults, debounced persistence
+  theme/  ui/                themes and shared components
+modules/densify-native/
+  android/src/main/java/     Engine, Hub (adb), ShizukuLink, Perf, Floating,
+                             DeviceInfo, PairingService, MonitorService ...
+docs/images/                 README images
+```
+
+## Credits
+
+- [libadb-android](https://github.com/MuntashirAkon/libadb-android) by Muntashir Al-Islam
+- [Conscrypt](https://github.com/google/conscrypt)
+- [Shizuku](https://github.com/RikkaApps/Shizuku) by RikkaApps, whose binder protocol Densify speaks
+- AxManager, an inspiration for the plugin and WebUI ideas
+
+## License
+
+MIT. See [LICENSE](LICENSE).
