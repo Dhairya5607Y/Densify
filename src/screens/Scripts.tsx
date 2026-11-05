@@ -10,7 +10,7 @@ import { Header } from './common';
 
 const TRIGGERS: { k: Script['trigger']; label: string }[] = [{ k: 'start', label: 'Game starts' }, { k: 'exit', label: 'Game exits' }, { k: 'boot', label: 'Phone boots' }];
 
-/** Small shell snippets that run through the same connection as DPI changes. */
+/** Small shell snippets that run through the same connection as display changes. */
 export function Scripts() {
   const { state, update } = useStore();
   const t = useTheme(); const nav = useNav();
@@ -54,7 +54,7 @@ export function Scripts() {
     <Screen>
       <Header title="Automation scripts" sub="Shell commands that run on triggers" onBack={nav.back} right={<Btn v="pri" label="New" onPress={() => setEdit({ id: String(Date.now()), name: '', code: '', trigger: 'start', pkg: '', on: true })} />} />
       {state.scripts.length === 0 ? (
-        <Surface pad={18}><T v="sub">No scripts yet. A script is one or more shell commands, for example turning animations down while you play. They run with the same access as DPI changes, so only add commands you understand.</T></Surface>
+        <Surface pad={18}><T v="sub">No scripts yet. A script is one or more shell commands, for example turning animations down while you play. They run with the same access as display changes, so only add commands you understand.</T></Surface>
       ) : (
         <>
           <Section title="Your scripts" />

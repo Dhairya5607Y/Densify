@@ -10,14 +10,15 @@ export const DEFAULT_PERF: AppState['perf'] = {
   pos: 'tr',
   fields: { fps: true, cpu: true, temp: true, ram: true, ping: true },
   record: true,
-  opt: { ram: false, anim: false, net: false, gameMode: false },
+  opt: { ram: false, anim: false, net: false, gameMode: false, saver: false, adaptive: false, scale: 0 },
 };
 
 export const DEFAULT_STATE: AppState = {
   perf: DEFAULT_PERF,
-  themeId: 'matte',
+  themeId: 'manga',
   accent: '',
-  defaultDpi: 0, // 0 = not detected yet; set from the device on first run
+  defaultSw: 0, // 0 = the phone's own smallest width; detected on first run
+  rec: { res: 'fhd', fps: 60, mbps: 0, codec: 'h264', orient: 'landscape', scope: 'ask', notif: true },
   automation: false,
   restoreOnBoot: true,
   lowBattery: true,

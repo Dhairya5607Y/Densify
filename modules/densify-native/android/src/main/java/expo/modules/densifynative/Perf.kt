@@ -20,6 +20,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
@@ -381,6 +382,34 @@ object Optimizer {
     if (!failed(a)) return true
     val b = Hub.adb.exec("cmd game mode " + (if (performance) 2 else 1) + " $pkg").getOrNull().orEmpty()
     return !failed(b)
+  }
+
+  /**
+   * Asks Android's Game Mode to draw the game at a lower resolution (Android 13 and newer, on games that allow it).
+   * That is the one setting that raises frame rate on a heavy game without touching how the interface looks. [scale] is 0.5 to 0.9.
+   */
+  suspend fun setRenderScale(pkg: String, scale: Float): Boolean {
+    val s = scale.coerceIn(0.3f, 0.9f)
+    val txt = String.format(Locale.US, "%.2f", s).trimEnd('0').trimEnd('.')
+    val out = Hub.adb.exec("cmd game set --mode performance --downscale $txt --user 0 $pkg").getOrNull().orEmpty()
+    val ok = !failed(out)
+    Hub.log(if (ok) "Render scale $txt for $pkg" else "This phone didn't accept a render scale for $pkg")
+    return ok
+  }
+
+  /** Undoes [setRenderScale]. */
+  suspend fun resetRenderScale(pkg: String) {
+    Hub.adb.exec("cmd game reset --user 0 $pkg")
+  }
+
+  /**
+   * One-time: has Android pre-compile the game's code for speed, which shortens loading and removes some first-run stutter.
+   * It can take a while on a large game, so it is run on request and not on every launch.
+   */
+  suspend fun compileApp(pkg: String): String {
+    if (!pkg.matches(Regex("[A-Za-z0-9._]+"))) return "That isn't a valid app."
+    val out = Hub.adb.exec("cmd package compile -m speed-profile -f $pkg").getOrNull().orEmpty()
+    return if (out.contains("Success", true)) "Done. $pkg is optimized." else if (out.isBlank()) "Couldn't reach the phone." else "Android said: ${out.trim().take(120)}"
   }
 }
 

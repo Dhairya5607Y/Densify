@@ -32,6 +32,36 @@ import java.util.Locale
 data class AdbState(val name: String, val message: String? = null)
 data class Density(val physical: Int, val ovr: Int?) { val effective: Int get() = ovr ?: physical }
 
+/**
+ * Smallest width (dp) is what Android shows under Developer options: the shorter side of the screen in pixels, divided by the density.
+ * Densify shows and stores this number everywhere, and only turns it into a density at the moment it is applied.
+ */
+object Sw {
+  /** Smallest width for a screen whose shorter side is [shortPx] pixels at [dpi]. Truncated, the way Android reports it. */
+  fun fromDpi(shortPx: Int, dpi: Int): Int = if (dpi <= 0 || shortPx <= 0) 0 else (shortPx * 160f / dpi).toInt()
+
+  /** The density that gives exactly [sw] on this screen. Looks a few steps either side so the width Android reports is the one asked for. */
+  fun toDpi(shortPx: Int, sw: Int): Int {
+    val est = Math.round(shortPx * 160.0 / sw.coerceAtLeast(1)).toInt()
+    for (d in intArrayOf(0, 1, -1, 2, -2, 3, -3)) {
+      val c = est + d
+      if (c in 72..1000 && fromDpi(shortPx, c) == sw) return c
+    }
+    return est.coerceIn(72, 1000)
+  }
+}
+
+/** Screen size and density together, which is everything needed to translate between smallest width and density. */
+data class DisplayInfo(val physW: Int, val physH: Int, val ovrW: Int?, val ovrH: Int?, val physDpi: Int, val ovrDpi: Int?) {
+  /** The shorter side of the screen as it is right now (the stretched size when one is set). */
+  val shortSide: Int get() = if (ovrW != null && ovrH != null) minOf(ovrW, ovrH) else minOf(physW, physH)
+  val dpi: Int get() = ovrDpi ?: physDpi
+  /** The smallest width the screen has right now. */
+  val sw: Int get() = Sw.fromDpi(shortSide, dpi)
+  /** The smallest width the phone ships with. */
+  val physSw: Int get() = Sw.fromDpi(minOf(physW, physH), physDpi)
+}
+
 /** Physical panel size and the current override (null when the size is not overridden). */
 data class ScreenSize(val physW: Int, val physH: Int, val ovrW: Int?, val ovrH: Int?) {
   val overrideText: String? get() = if (ovrW != null && ovrH != null) "${ovrW}x${ovrH}" else null
@@ -476,6 +506,30 @@ class AdbHub(private val ctx: Context) {
       kotlinx.coroutines.delay(250)
     }
     return Result.failure(IllegalStateException("The system did not reset the density."))
+  }
+
+  /** Size and density in one round trip. */
+  suspend fun readDisplay(): Result<DisplayInfo> = exec("wm size; wm density").mapCatching { out ->
+    val ps = Regex("Physical size:\\s*(\\d+)x(\\d+)").find(out) ?: error("Couldn't read the screen size.")
+    val os = Regex("Override size:\\s*(\\d+)x(\\d+)").find(out)
+    val pd = Regex("Physical density:\\s*(\\d+)").find(out)?.groupValues?.get(1)?.toInt() ?: error("Couldn't read the current density.")
+    val od = Regex("Override density:\\s*(\\d+)").find(out)?.groupValues?.get(1)?.toInt()
+    val pw = ps.groupValues[1].toInt(); val ph = ps.groupValues[2].toInt()
+    Hub.prefs.edit().putInt("physDpi", pd).putInt("physW", pw).putInt("physH", ph).apply()
+    DisplayInfo(pw, ph, os?.groupValues?.get(1)?.toInt(), os?.groupValues?.get(2)?.toInt(), pd, od)
+  }
+
+  /**
+   * Sets the smallest width (dp). The density is worked out from the screen size as it is right now, so the width Android reports
+   * afterwards is the number asked for. Returns the smallest width the screen actually has.
+   */
+  suspend fun setSmallestWidth(sw: Int): Result<Int> {
+    if (sw < 1) return Result.failure(IllegalArgumentException("Invalid smallest width: $sw"))
+    val d = readDisplay().getOrElse { return Result.failure(it) }
+    val dpi = Sw.toDpi(d.shortSide, sw)
+    val r = setDensity(dpi)
+    if (r.isFailure) return Result.failure(r.exceptionOrNull() ?: IllegalStateException("Couldn't set the smallest width."))
+    return Result.success(Sw.fromDpi(d.shortSide, dpi))
   }
 
   suspend fun readSize(): Result<ScreenSize> = exec("wm size").mapCatching { out ->

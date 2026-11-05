@@ -8,7 +8,7 @@ import kotlinx.coroutines.launch
 /**
  * Lets other apps (Tasker, automation tools, adb shell) drive Densify.
  * Off by default. Every call must carry the token shown in Densify's settings.
- * Actions: SET_DPI (int extra "dpi"), RESTORE, TOGGLE_STRETCH.
+ * Actions: SET_SW (int extra "sw", smallest width in dp), SET_DPI (int extra "dpi", raw density), RESTORE, TOGGLE_STRETCH.
  */
 class ExternalReceiver : BroadcastReceiver() {
   override fun onReceive(ctx: Context, intent: Intent) {
@@ -26,6 +26,11 @@ class ExternalReceiver : BroadcastReceiver() {
             val r = Hub.engine.adjustDpi(dpi)
             Hub.log("External request: ${dpi} DPI ${if (r.isSuccess) "applied" else "failed"}")
           }
+          ACTION_SET_SW -> {
+            val sw = intent.getIntExtra("sw", 0)
+            val r = Hub.engine.adjustSw(sw)
+            Hub.log("External request: smallest width $sw ${if (r.isSuccess) "applied" else "failed"}")
+          }
           ACTION_RESTORE -> { Hub.engine.restoreAll(); Hub.log("External request: restore") }
           ACTION_TOGGLE_STRETCH -> { Hub.engine.toggleStretch(); Hub.log("External request: toggle stretch") }
         }
@@ -35,6 +40,7 @@ class ExternalReceiver : BroadcastReceiver() {
 
   companion object {
     const val ACTION_SET_DPI = "com.densify.app.action.SET_DPI"
+    const val ACTION_SET_SW = "com.densify.app.action.SET_SW"
     const val ACTION_RESTORE = "com.densify.app.action.RESTORE"
     const val ACTION_TOGGLE_STRETCH = "com.densify.app.action.TOGGLE_STRETCH"
   }

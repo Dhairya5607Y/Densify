@@ -9,7 +9,7 @@ import { AppSwitch, Btn, Chip, Group, Icon, Row, Section, T } from '../ui/primit
 import { Sheet, useToast } from '../ui/overlays';
 import { Screen } from '../ui/scroll';
 import { BUNDLE_ITEMS } from '../logic/features';
-import { parseDpi } from '../logic/dpi';
+import { parseSw } from '../logic/dpi';
 import { Header } from './common';
 
 const MAX_QUICK = 6;
@@ -37,7 +37,7 @@ export function Presets() {
     setEdit(null); toast({ title: 'Preset deleted', sub: gone.name });
   };
   const addQuick = () => {
-    const r = parseDpi(q);
+    const r = parseSw(q);
     if (r.err !== undefined) { setQErr(r.err); return; }
     if (state.quick.includes(r.v)) { setQErr('Already in the list.'); return; }
     update((s) => ({ ...s, quick: [...s.quick, r.v].sort((a, b) => a - b) })); setQ(''); setQErr('');
@@ -51,7 +51,7 @@ export function Presets() {
         {state.presets.map((p) => <Row key={p.id} leadIcon="tune" title={p.name} sub={`${count(p)} of ${BUNDLE_ITEMS.length} settings on`} onPress={() => open(p)} right={<Icon name="chevron-right" />} />)}
         <Row leadIcon="add" title={<T c={t.c.ac}>New preset</T>} onPress={() => open(null)} />
       </Group>
-      <Section title="Quick DPI values" />
+      <Section title="Quick smallest-width values" />
       <View style={{ borderRadius: t.r, borderWidth: t.bw, borderColor: t.c.bd, backgroundColor: t.c.sf, padding: 16 }}>
         <T v="sub" style={{ marginBottom: 12 }}>Shown on every profile and used by the Quick Settings tile. Tap one to remove it.</T>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

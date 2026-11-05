@@ -37,8 +37,29 @@ const lum = (hex: string) => {
   const f = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
   return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
 };
-/** Replaces a theme's accent with the user's colour, keeping text on it readable. */
+/** Parses '#rrggbb' or 'rgba(r,g,b,a)' into [r, g, b, a]. */
+function rgba(c: string): [number, number, number, number] {
+  const m = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
+  const n = parseInt(c.replace('#', '').slice(0, 6), 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
+}
+/** An opaque 0xFFRRGGBB number (as an unsigned value) for the native floating panel. A see-through colour is laid over `over` first. */
+export function argb(c: string, over = '#000000'): number {
+  const [r, g, b, a] = rgba(c);
+  const [or, og, ob] = rgba(over);
+  const mix = (f: number, o: number) => Math.round(f * a + o * (1 - a));
+  return ((0xff << 24) >>> 0) + (mix(r, or) << 16) + (mix(g, og) << 8) + mix(b, ob);
+}
+const lumOf = (c: string) => { const [r, g, b] = rgba(c); const f = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+/** WCAG contrast ratio between two colours. */
+export function contrast(a: string, b: string): number { const x = lumOf(a); const y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+/** True when the accent would be hard to see (or read text on) against this theme's own background. */
+export const accentClashes = (t: Theme, hex: string) => contrast(hex, t.c.bg) < 2.4 || contrast(hex, t.c.sf) < 2.2;
+
+/** Replaces a theme's accent with the user's colour, keeping text on it readable. A colour that would disappear into the theme is ignored. */
 export function withAccent(t: Theme, hex: string): Theme {
+  if (accentClashes(t, hex)) return t;
   const n = parseInt(hex.replace('#', ''), 16);
   const acs = `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${t.dark ? 0.16 : 0.12})`;
   return { ...t, c: { ...t.c, ac: hex, acs, on: lum(hex) > 0.4 ? '#0a0a0a' : '#ffffff' } };

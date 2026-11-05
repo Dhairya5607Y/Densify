@@ -16,6 +16,7 @@ import org.json.JSONObject
  *   2 setDensity(Int)   -> reply: exception or Int
  *   3 restore()         -> reply: exception or Int
  *   4 ping()            -> reply: String "densify"
+ *   5 setSmallestWidth(Int) -> reply: exception or Int (the smallest width now in effect)
  * Descriptor: "com.densify.app.IDensifyApi". An app that is not approved gets a SecurityException and shows up in Densify's Apps screen.
  */
 class ApiService : Service() {
@@ -23,7 +24,7 @@ class ApiService : Service() {
     Hub.init(this)
     return object : Binder() {
       override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-        if (code !in 1..4) return super.onTransact(code, data, reply, flags)
+        if (code !in 1..5) return super.onTransact(code, data, reply, flags)
         data.enforceInterface(DESCRIPTOR)
         val pkg = packageManager.getPackagesForUid(Binder.getCallingUid())?.firstOrNull() ?: ""
         val state = grantOf(pkg)
@@ -45,6 +46,12 @@ class ApiService : Service() {
               val dpi = data.readInt()
               Hub.log("API ($pkg): set $dpi DPI")
               val r = runBlocking(Dispatchers.IO) { Hub.engine.adjustDpi(dpi) }.getOrThrow()
+              reply?.writeNoException(); reply?.writeInt(r)
+            }
+            5 -> {
+              val sw = data.readInt()
+              Hub.log("API ($pkg): set smallest width $sw")
+              val r = runBlocking(Dispatchers.IO) { Hub.engine.adjustSw(sw) }.getOrThrow()
               reply?.writeNoException(); reply?.writeInt(r)
             }
             3 -> {

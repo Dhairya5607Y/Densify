@@ -26,6 +26,7 @@ import { PluginUI } from './src/screens/PluginUI';
 import { Apps } from './src/screens/Apps';
 import { Developer } from './src/screens/Developer';
 import { SettingsEditor } from './src/screens/SettingsEditor';
+import { Recorder } from './src/screens/Recorder';
 import { CrashScreen, installCrashHandler } from './src/screens/Crash';
 
 function Slide({ children }: { children: React.ReactNode }) {
@@ -39,13 +40,11 @@ function Shell() {
   const nav = useNav();
   const adb = useAdb();
   useEffect(() => { if (state.automation && !api.isMonitoring()) api.startMonitoring(); }, []);
-  // The default DPI is the phone's own (base) density. Fill it in by itself the first time Wireless Debugging connects, and
-  // replace a value that is really a game's DPI left over from an earlier failed restore.
+  // Until the user picks a default, it is the phone's own smallest width. It is filled in once, the first time Wireless Debugging connects,
+  // and never replaced afterwards, so a value the user typed (such as 420) always stays.
   useEffect(() => {
-    if (adb.state !== 'connected') return;
-    const bad = !state.defaultDpi || state.profiles.some((p) => p.dpi === state.defaultDpi);
-    if (!bad) return;
-    api.readDensity().then((d) => { if (d.physical > 0 && d.physical !== state.defaultDpi) update((s) => ({ ...s, defaultDpi: d.physical })); }).catch(() => {});
+    if (adb.state !== 'connected' || state.defaultSw > 0) return;
+    api.readSw().then((d) => { if (d.physSw > 0) update((s) => (s.defaultSw > 0 ? s : { ...s, defaultSw: d.physSw })); }).catch(() => {});
   }, [adb.state]);
   const r = nav.route;
   return (
@@ -70,6 +69,7 @@ function Shell() {
             {r.name === 'developer' && <Developer />}
             {r.name === 'settingsEditor' && <SettingsEditor />}
             {r.name === 'apps' && <Apps />}
+            {r.name === 'recorder' && <Recorder />}
           </View>
         </Slide>
       )}

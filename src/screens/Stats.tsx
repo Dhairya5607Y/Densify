@@ -69,9 +69,13 @@ export function Stats() {
     setPerf((x) => ({ ...x, hud: m }));
     if (m !== 'off') api.startMonitoring();
   };
-  const setOpt = async (k: keyof PerfCfg['opt'], v: boolean) => {
+  const setOpt = async (k: 'ram' | 'anim' | 'net' | 'gameMode' | 'saver' | 'adaptive', v: boolean) => {
     if (v && !(await ensure('perf'))) return;
     setPerf((x) => ({ ...x, opt: { ...x.opt, [k]: v } }));
+  };
+  const setScale = async (v: number) => {
+    if (v > 0 && !(await ensure('perf'))) return;
+    setPerf((x) => ({ ...x, opt: { ...x.opt, scale: v } }));
   };
   const clean = async () => {
     if (busy || !(await ensure('perf'))) return;
@@ -148,8 +152,12 @@ export function Stats() {
         <Row leadIcon="speed" title="Snappier animations" sub="Halves system animation time while you play, then puts it back" right={<AppSwitch on={p.opt.anim} onChange={(v) => setOpt('anim', v)} />} />
         <Row leadIcon="wifi" title="Network boost" sub="Low-latency Wi-Fi mode and no background radio scans while you play" right={<AppSwitch on={p.opt.net} onChange={(v) => setOpt('net', v)} />} />
         <Row leadIcon="sports-esports" title="System Game Mode: Performance" sub="Asks Android to run the game in its Performance mode (Android 12+ phones that support it)" right={<AppSwitch on={p.opt.gameMode} onChange={(v) => setOpt('gameMode', v)} />} />
+        <Row leadIcon="battery-saver" title="Battery saver off while playing" sub="Turns Android's battery saver off so it doesn't throttle the CPU, then puts it back" right={<AppSwitch on={p.opt.saver} onChange={(v) => setOpt('saver', v)} />} />
+        <Row leadIcon="battery-charging-full" title="Adaptive battery off while playing" sub="Stops Android from holding the game back in the background, then puts it back" right={<AppSwitch on={p.opt.adaptive} onChange={(v) => setOpt('adaptive', v)} />} />
+        <Row leadIcon="photo-size-select-large" title="Lower render resolution" sub="Asks Android (Game Mode) to draw the game at a lower resolution. Smoother and cooler, a little less sharp. Android 12+ and only for games that allow it." below={
+          ([[0, 'Off'], [0.9, '90%'], [0.8, '80%'], [0.7, '70%'], [0.6, '60%']] as const).map(([v, l]) => <Chip key={v} h={36} label={l} on={p.opt.scale === v} onPress={() => setScale(v)} />)} />
       </Group>
-      <T v="sub" style={{ marginHorizontal: 10, marginTop: 10 }}>These settings change only while a game from your list is open and are put back when it closes. Network boost removes local causes of lag spikes; it cannot make your internet connection itself faster. For smoother frames and cooler temperatures, also turn on Performance mode and a lower DPI in the game's profile.</T>
+      <T v="sub" style={{ marginHorizontal: 10, marginTop: 10 }}>These settings change only while a game from your list is open and are put back when it closes. Network boost removes local causes of lag spikes; it cannot make your internet connection itself faster. For smoother frames and cooler temperatures, turn on Performance mode and, if it suits you, a lower render resolution. Each game's profile also has a button that compiles its files for faster loading.</T>
     </Screen>
   );
 }

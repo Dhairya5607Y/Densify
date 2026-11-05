@@ -100,7 +100,7 @@ export function Plugins() {
             <Btn v="tonal" label="Example" onPress={() => setText(EXAMPLE)} />
           </View>
         </Surface>
-        <T v="sub" style={{ margin: 10 }}>Plugins run shell commands with the same access as DPI changes. Only install plugins you trust. A plugin can have actions you run by hand, hooks that run on game start, game exit or boot, and a WebUI page.</T>
+        <T v="sub" style={{ margin: 10 }}>Plugins run shell commands with the same access as display changes. Only install plugins you trust. A plugin can have actions you run by hand, hooks that run on game start, game exit or boot, and a WebUI page.</T>
       </Screen>
     );
   }

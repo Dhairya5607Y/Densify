@@ -7,6 +7,11 @@ export type { AdbState, Capabilities, EngineEvent, InstalledApp, SettingsKind };
 /** True only inside the real Android build. In Expo Go / web the app still runs, but reads no device data. */
 export const nativeAvailable = Native != null;
 
+export type RecStatus = { state: 'idle' | 'recording' | 'paused'; elapsedMs: number; info: string; notes: string; name: string; error: string; last: string };
+export type RecCaps = { hevc: boolean; uhd30: boolean; uhd60: boolean; sdk: number };
+export type RecPlan = { w: number; h: number; fps: number; mbps: number; hevc: boolean; label: string; notes: string[] };
+const REC_IDLE: RecStatus = { state: 'idle', elapsedMs: 0, info: '', notes: '', name: '', error: '', last: '' };
+
 const caps0: Capabilities = { hz: 60, perf: false, guard: false, tile: false };
 
 export type ShizukuStatus = 'MISSING' | 'STOPPED' | 'NEEDS_PERMISSION' | 'READY';
@@ -43,6 +48,9 @@ export const api = {
   capabilities: async (): Promise<Capabilities> => (Native ? Native.capabilities().catch(() => caps0) : caps0),
   readDensity: async () => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.readDensity(); },
   setDensity: async (dpi: number) => { if (!Native) throw new Error('DPI control is only available in the installed app.'); return Native.setDensity(dpi); },
+  /** Smallest width in dp (what Developer options shows), plus the phone's own and the current density. */
+  readSw: async () => { if (!Native) throw new Error('Smallest width control is only available in the installed app.'); return Native.readSw(); },
+  setSw: async (sw: number) => { if (!Native) throw new Error('Smallest width control is only available in the installed app.'); return Native.setSw(sw); },
   readSize: async () => { if (!Native) throw new Error('Screen size control is only available in the installed app.'); return Native.readSize(); },
   setSize: async (w: number, h: number) => { if (!Native) throw new Error('Not available here.'); return Native.setSize(w, h); },
   resetSize: async () => { if (!Native) throw new Error('Not available here.'); return Native.resetSize(); },
@@ -74,7 +82,32 @@ export const api = {
   perfSessions: () => (Native ? Native.perfSessions() : '[]'),
   perfClear: () => (Native ? Native.perfClear() : false),
   optimizeNow: async () => { if (!Native) throw new Error('Only available in the installed app.'); return Native.optimizeNow(); },
+  compileApp: async (pkg: string) => { if (!Native) throw new Error('Only available in the installed app.'); return Native.compileApp(pkg); },
+  recStatus: (): RecStatus => {
+    try { return Native ? (JSON.parse(Native.recStatus()) as RecStatus) : REC_IDLE; } catch { return REC_IDLE; }
+  },
+  recCaps: (): RecCaps => {
+    try { return Native ? (JSON.parse(Native.recCaps()) as RecCaps) : { hevc: false, uhd30: false, uhd60: false, sdk: 34 }; } catch { return { hevc: false, uhd30: false, uhd60: false, sdk: 34 }; }
+  },
+  recPlan: (): RecPlan | null => {
+    try { return Native ? (JSON.parse(Native.recPlan(0, 0)) as RecPlan) : null; } catch { return null; }
+  },
+  recStart: () => (Native ? Native.recStart() : false),
+  recPause: () => (Native ? Native.recPause() : false),
+  recResume: () => (Native ? Native.recResume() : false),
+  recStop: () => (Native ? Native.recStop() : false),
+  recOpenLast: () => (Native ? Native.recOpenLast() : false),
 };
+
+/** Polls the recorder once a second while the screen that shows it is open. */
+export function useRecorder() {
+  const [s, set] = useState<RecStatus>(() => api.recStatus());
+  useEffect(() => {
+    const id = setInterval(() => set(api.recStatus()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return s;
+}
 
 export function useAdb() {
   const [s, set] = useState<AdbEvent>({ state: api.adbConnected() ? 'connected' : 'disconnected' });

@@ -15,27 +15,68 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 data class BundleCfg(val hz: Boolean, val perf: Boolean, val dnd: Boolean, val rot: Boolean, val guard: Boolean, val bright: Boolean, val awake: Boolean)
 /** Stretch for a game. w/h of 0 means "use the global stretch resolution". */
 data class StretchCfg(val on: Boolean = false, val w: Int = 0, val h: Int = 0)
-data class Profile(val pkg: String, val name: String, val dpi: Int, val auto: Boolean, val restore: Boolean, val bundle: BundleCfg, val stretch: StretchCfg = StretchCfg())
+/** [sw] is the game's smallest width in dp, the same number Android shows under Developer options. It is turned into a density only when applied. */
+data class Profile(val pkg: String, val name: String, val sw: Int, val auto: Boolean, val restore: Boolean, val bundle: BundleCfg, val stretch: StretchCfg = StretchCfg())
 data class ScriptCfg(val name: String, val code: String, val trigger: String, val pkg: String, val on: Boolean)
 /** What the optimizer does by itself when a game opens. Everything it changes is put back when the game closes. */
-data class OptCfg(val ram: Boolean = false, val anim: Boolean = false, val net: Boolean = false, val gameMode: Boolean = false)
+data class OptCfg(
+  val ram: Boolean = false,
+  val anim: Boolean = false,
+  val net: Boolean = false,
+  val gameMode: Boolean = false,
+  /** Turn Android's battery saver off while playing. */
+  val saver: Boolean = false,
+  /** Turn adaptive battery off while playing. */
+  val adaptive: Boolean = false,
+  /** Game Mode render scale (0.5 to 0.9). 0 means off. */
+  val scale: Float = 0f,
+)
+
+/** The colours and shape of the app's current theme, so the floating panel looks like the app. Colours are ARGB. */
+data class PanelTheme(
+  val bg: Int = 0xFF0A0E13.toInt(),
+  val sf: Int = 0xFF141A21.toInt(),
+  val sf2: Int = 0xFF1E252D.toInt(),
+  val bd: Int = 0xFF2A333D.toInt(),
+  val tx: Int = 0xFFF2F5F8.toInt(),
+  val mu: Int = 0xFF8B939E.toInt(),
+  val ac: Int = 0xFF5CBDFF.toInt(),
+  val on: Int = 0xFF04121F.toInt(),
+  val r: Float = 20f,
+  val rs: Float = 12f,
+  val bw: Float = 1f,
+  val mono: Boolean = false,
+  val upper: Boolean = false,
+)
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
 private fun hudFieldsFrom(f: JSONObject?): Set<String> = if (f == null) HUD_FIELDS.toSet() else HUD_FIELDS.filter { f.optBoolean(it, true) }.toSet()
 
+private fun themeFrom(o: JSONObject?): PanelTheme {
+  if (o == null) return PanelTheme()
+  val d = PanelTheme()
+  fun c(k: String, def: Int): Int = if (o.has(k)) o.optLong(k).toInt() else def
+  return PanelTheme(
+    bg = c("bg", d.bg), sf = c("sf", d.sf), sf2 = c("sf2", d.sf2), bd = c("bd", d.bd), tx = c("tx", d.tx), mu = c("mu", d.mu), ac = c("ac", d.ac), on = c("on", d.on),
+    r = o.optDouble("r", d.r.toDouble()).toFloat(), rs = o.optDouble("rs", d.rs.toDouble()).toFloat(), bw = o.optDouble("bw", d.bw.toDouble()).toFloat(),
+    mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false),
+  )
+}
+
 data class Cfg(
-  val defaultDpi: Int = 0,
+  /** The smallest width (dp) to go back to after a game. 0 means "the phone's own". */
+  val defaultSw: Int = 0,
   val automation: Boolean = true,
   val lowBattery: Boolean = true,
   val lowBatteryPercent: Int = 50,
   val floating: String = "off",
   val autoReconnect: Boolean = true,
   val mode: String = "wireless",
+  /** Quick values, in smallest width (dp). */
   val quick: List<Int> = emptyList(),
   val profiles: List<Profile> = emptyList(),
   val scripts: List<ScriptCfg> = emptyList(),
@@ -48,6 +89,8 @@ data class Cfg(
   /** Record FPS, CPU, temperature and RAM while a configured game is open. */
   val record: Boolean = true,
   val opt: OptCfg = OptCfg(),
+  /** The floating panel follows this. The stats overlay deliberately does not. */
+  val theme: PanelTheme = PanelTheme(),
 ) {
   companion object {
     fun parse(raw: String): Cfg = runCatching {
@@ -56,27 +99,41 @@ data class Cfg(
       val q = o.optJSONArray("quick")
       val sc = o.optJSONArray("scripts")
       Cfg(
-        o.optInt("defaultDpi", 0), o.optBoolean("automation", true), o.optBoolean("lowBattery", true), o.optInt("lowBatteryPercent", 50),
-        o.optString("floating", "off"), o.optBoolean("autoReconnect", true), o.optString("mode", "wireless"),
-        (0 until (q?.length() ?: 0)).map { q!!.getInt(it) },
-        (0 until (ps?.length() ?: 0)).mapNotNull { i ->
+        defaultSw = o.optInt("defaultSw", 0),
+        automation = o.optBoolean("automation", true),
+        lowBattery = o.optBoolean("lowBattery", true),
+        lowBatteryPercent = o.optInt("lowBatteryPercent", 50),
+        floating = o.optString("floating", "off"),
+        autoReconnect = o.optBoolean("autoReconnect", true),
+        mode = o.optString("mode", "wireless"),
+        quick = (0 until (q?.length() ?: 0)).map { q!!.getInt(it) },
+        profiles = (0 until (ps?.length() ?: 0)).mapNotNull { i ->
           runCatching {
             val p = ps!!.getJSONObject(i); val b = p.getJSONObject("bundle")
             val s = p.optJSONObject("stretch")
-            Profile(p.getString("pkg"), p.getString("name"), p.getInt("dpi"), p.optBoolean("auto", true), p.optBoolean("restore", true),
+            Profile(p.getString("pkg"), p.getString("name"), p.getInt("sw"), p.optBoolean("auto", true), p.optBoolean("restore", true),
               BundleCfg(b.optBoolean("hz"), b.optBoolean("perf"), b.optBoolean("dnd"), b.optBoolean("rot"), b.optBoolean("guard"), b.optBoolean("bright"), b.optBoolean("awake")),
               if (s == null) StretchCfg() else StretchCfg(s.optBoolean("on"), s.optInt("w", 0), s.optInt("h", 0)))
           }.getOrNull()
         },
-        (0 until (sc?.length() ?: 0)).mapNotNull { i ->
+        scripts = (0 until (sc?.length() ?: 0)).mapNotNull { i ->
           runCatching {
             val s = sc!!.getJSONObject(i)
             ScriptCfg(s.getString("name"), s.getString("code"), s.getString("trigger"), s.optString("pkg", ""), s.optBoolean("on", true))
           }.getOrNull()
         },
-        o.optBoolean("bridge", false),
-        o.optString("hud", "off"), o.optString("hudPos", "tr"), hudFieldsFrom(o.optJSONObject("hudFields")), o.optBoolean("record", true),
-        o.optJSONObject("opt")?.let { OptCfg(it.optBoolean("ram"), it.optBoolean("anim"), it.optBoolean("net"), it.optBoolean("gameMode")) } ?: OptCfg(),
+        bridge = o.optBoolean("bridge", false),
+        hud = o.optString("hud", "off"),
+        hudPos = o.optString("hudPos", "tr"),
+        hudFields = hudFieldsFrom(o.optJSONObject("hudFields")),
+        record = o.optBoolean("record", true),
+        opt = o.optJSONObject("opt")?.let {
+          OptCfg(
+            ram = it.optBoolean("ram"), anim = it.optBoolean("anim"), net = it.optBoolean("net"), gameMode = it.optBoolean("gameMode"),
+            saver = it.optBoolean("saver"), adaptive = it.optBoolean("adaptive"), scale = it.optDouble("scale", 0.0).toFloat(),
+          )
+        } ?: OptCfg(),
+        theme = themeFrom(o.optJSONObject("theme")),
       )
     }.getOrDefault(Cfg())
   }
@@ -84,9 +141,10 @@ data class Cfg(
 
 data class EngineState(
   val running: Boolean = false,
-  val appliedDpi: Int? = null,
+  /** The smallest width (dp) the screen has right now, as far as Densify knows. */
+  val appliedSw: Int? = null,
   val activePkg: String? = null,
-  /** A configured game is on screen right now, even if DPI could not be applied. Drives the floating panel. */
+  /** A configured game is on screen right now, even if the width could not be applied. Drives the floating panel. */
   val frontPkg: String? = null,
   val stretched: Boolean = false,
   val errTitle: String? = null,
@@ -112,7 +170,7 @@ fun stretchTarget(s: ScreenSize, w: Int, h: Int): Pair<Int, Int>? {
 
 /**
  * One coroutine owns all state. game->game applies directly; leaving a game waits GRACE_MS then restores
- * the DPI, the screen size and every setting the profile changed, from a persisted snapshot (so it also recovers after a crash).
+ * the smallest width, the screen size and every setting the profile changed, from a persisted snapshot (so it also recovers after a crash).
  */
 class Engine(private val app: Context) {
   private val _state = MutableStateFlow(EngineState())
@@ -127,7 +185,7 @@ class Engine(private val app: Context) {
   private var candAt = 0L
   private var pendingRestore = false
   /**
-   * After DPI or screen size changes (by hand or by a profile) most games relaunch their window, and for a moment no game is in front.
+   * After the width or screen size changes (by hand or by a profile) most games relaunch their window, and for a moment no game is in front.
    * Until this time that gap is not read as "left the game", so the engine never restores over the user's change.
    */
   @Volatile private var holdUntil = 0L
@@ -143,12 +201,13 @@ class Engine(private val app: Context) {
 
   @Synchronized fun start() {
     if (job?.isActive == true) return
-    pendingRestore = Hub.prefs.contains("snap")
+    // A leftover snapshot or "game active" marker means the last session ended without a restore (crash, killed app, reboot).
+    pendingRestore = Hub.prefs.contains("snap") || Hub.prefs.contains("gameActive")
     _state.update { it.copy(running = true) }
     job = Hub.scope.launch {
       checkBoot()
       while (isActive) {
-        // One bad tick must never end the loop: a dead loop means no DPI changes and no floating panel until the app is reopened.
+        // One bad tick must never end the loop: a dead loop means no changes and no floating panel until the app is reopened.
         try {
           if (!Hub.detector.hasAccess()) {
             _state.update { it.copy(errTitle = "Usage Access is off.", errHint = "Allow Usage Access so Densify can see which game is open.") }
@@ -181,7 +240,7 @@ class Engine(private val app: Context) {
   private suspend fun tick() {
     val c = config()
     val fg = Hub.detector.poll()
-    // Densify itself is never a game, so opening the app can never change DPI.
+    // Densify itself is never a game, so opening the app can never change the width.
     val front = if (fg != app.packageName) c.profiles.firstOrNull { it.pkg == fg } else null
     if (_state.value.frontPkg != front?.pkg) _state.update { it.copy(frontPkg = front?.pkg) }
     val p = if (c.automation && front != null && front.auto) front else null
@@ -190,119 +249,155 @@ class Engine(private val app: Context) {
       val nowMs = SystemClock.elapsedRealtime()
       // After a failed attempt wait a few seconds, then try again instead of giving up until the game is reopened.
       if (failedPkg == p.pkg) { if (nowMs - failedAt < 8_000) return; failedPkg = null }
-      // A game must stay in front for a moment before DPI changes, so a brief flash of its window doesn't trigger it.
+      // A game must stay in front for a moment before anything changes, so a brief flash of its window doesn't trigger it.
       if (candPkg != p.pkg) { candPkg = p.pkg; candAt = nowMs }
       if (active?.pkg != p.pkg && nowMs - candAt < 700) return
-      if (active?.pkg != p.pkg || active?.dpi != p.dpi) apply(p, c)
+      if (active?.pkg != p.pkg || active?.sw != p.sw) apply(p, c)
     } else {
       failedPkg = null
       candPkg = null
       val a = active
       if (a == null) {
         if (pendingRestore) { pendingRestore = false; restoreAll(c) }
-        else if (!stuckChecked && Hub.adb.isConnected) { stuckChecked = true; recoverStuckDensity(c) }
+        else if (!stuckChecked && Hub.adb.isConnected) { stuckChecked = true; recoverStuckWidth(c) }
         return
       }
       val now = SystemClock.elapsedRealtime()
       if (now < holdUntil) { leftAt = 0; return }
       if (leftAt == 0L) { leftAt = now; return }
-      // Leaving the game for any reason (home, recents, another app, screen off) always returns DPI and size to the default.
+      // Leaving the game for any reason (home, recents, another app, screen off) always returns the width and size to the default.
       if (now - leftAt >= GRACE_MS) restoreAll(c)
     }
   }
 
-  /** A game DPI left behind by an earlier failed restore is put back to the default once, when Densify starts. */
-  private suspend fun recoverStuckDensity(c: Cfg) {
-    val d = Hub.adb.readDensity().getOrNull() ?: return
-    if (d.ovr != null && c.profiles.any { it.dpi == d.ovr }) {
-      Hub.log("Found ${d.ovr} DPI left over from a game. Restoring.")
+  /** A game width left behind by an earlier failed restore is put back to the default once, when Densify starts. */
+  private suspend fun recoverStuckWidth(c: Cfg) {
+    val d = Hub.adb.readDisplay().getOrNull() ?: return
+    if (d.ovrDpi != null && d.sw != c.defaultSw && c.profiles.any { it.sw == d.sw }) {
+      Hub.log("Found smallest width ${d.sw} left over from a game. Restoring.")
       restoreAll(c)
     }
   }
 
   private suspend fun apply(p: Profile, c: Cfg) {
-    Hub.log("${p.name} (${p.pkg}) in front. Applying ${p.dpi} DPI${if (p.stretch.on) " and stretch" else ""}")
+    Hub.log("${p.name} (${p.pkg}) in front. Applying smallest width ${p.sw}${if (p.stretch.on) " and stretch" else ""}")
     applyBundle(p.bundle)
     runCatching { applyOptimizer(c.opt, p.pkg) }.onFailure { Hub.log("Optimizer hiccup: ${it.message}") }
+    // The size goes first: smallest width depends on the screen size, so the width is worked out against the final size.
     if (p.stretch.on) applyStretch(p.stretch) else if (_state.value.stretched) restoreSizeOnly()
-    val r = Hub.adb.setDensity(p.dpi)
+    val r = Hub.adb.setSmallestWidth(p.sw)
     if (r.isSuccess) {
       active = p
       holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
-      _state.update { it.copy(appliedDpi = p.dpi, activePkg = p.pkg, errTitle = null, errHint = null) }
+      Hub.prefs.edit().putString("gameActive", p.pkg).apply()
+      _state.update { it.copy(appliedSw = r.getOrNull(), activePkg = p.pkg, errTitle = null, errHint = null) }
       maybeWarnBattery(c)
       runScripts("start", p.pkg)
     } else {
       failedPkg = p.pkg
       failedAt = SystemClock.elapsedRealtime()
-      Hub.log("Couldn't apply ${p.dpi} DPI: ${r.exceptionOrNull()?.message}")
-      _state.update { it.copy(errTitle = "Couldn't apply ${p.dpi} DPI.", errHint = "Check your connection.") }
+      Hub.log("Couldn't apply smallest width ${p.sw}: ${r.exceptionOrNull()?.message}")
+      _state.update { it.copy(errTitle = "Couldn't apply smallest width ${p.sw}.", errHint = "Check your connection.") }
       restoreAll(c)
     }
   }
 
   /**
-   * The density to go back to. A stored default that is zero, or that equals one of the games' own DPI values,
-   * is a leftover from a failed restore and not a real default, so the phone's own (base) density is used instead.
+   * Goes back to the default smallest width. A default of 0, or one that already equals the phone's own, uses Android's own reset,
+   * so the phone ends up exactly as it shipped. Anything else is applied as a smallest width.
    */
-  private suspend fun baseDpi(c: Cfg): Int? {
-    val phys = Hub.prefs.getInt("physDpi", 0).takeIf { it > 0 } ?: Hub.adb.readDensity().getOrNull()?.physical
-    val d = c.defaultDpi
-    val bogus = d <= 0 || c.profiles.any { it.dpi == d }
-    return if (bogus) null else if (phys != null && d == phys) null else d   // null = "reset to the phone's own density"
+  private suspend fun restoreDefaultWidth(c: Cfg): Result<Int> {
+    val d = Hub.adb.readDisplay().getOrNull()
+    val want = c.defaultSw
+    if (want <= 0 || d == null || d.physSw == want) {
+      val r = Hub.adb.resetDensity()
+      if (r.isFailure) return Result.failure(r.exceptionOrNull() ?: IllegalStateException("The system did not reset the density."))
+      return Result.success(Hub.adb.readDisplay().getOrNull()?.sw ?: d?.physSw ?: 0)
+    }
+    return Hub.adb.setSmallestWidth(want)
   }
 
   suspend fun restoreAll(c: Cfg = config()): Result<Int> {
     val prev = active
     restoreBundle()
-    val target = baseDpi(c)
-    val r = if (target == null) Hub.adb.resetDensity() else Hub.adb.setDensity(target)
+    val r = restoreDefaultWidth(c)
     if (r.isSuccess) {
-      val d = r.getOrDefault(target ?: 0)
+      val sw = r.getOrDefault(0)
       active = null; leftAt = 0; holdUntil = 0; batteryNotified = false
-      _state.update { it.copy(appliedDpi = d, activePkg = null, stretched = false, errTitle = null, errHint = null) }
-      Hub.log("Restored $d DPI")
+      Hub.prefs.edit().remove("gameActive").apply()
+      _state.update { it.copy(appliedSw = sw, activePkg = null, stretched = false, errTitle = null, errHint = null) }
+      Hub.log("Restored smallest width $sw")
       if (prev != null) runScripts("exit", prev.pkg)
     } else {
-      _state.update { it.copy(errTitle = "Couldn't restore the default DPI.", errHint = "Check your connection, then retry.") }
+      _state.update { it.copy(errTitle = "Couldn't restore the default smallest width.", errHint = "Check your connection, then retry.") }
     }
     return r
   }
 
   /**
-   * The one way to change DPI by hand (floating panel, notification, tile, app, external API). The engine learns the new value, so no
+   * The one way to change the width by hand (floating panel, notification, tile, app). The engine learns the new value, so no
    * screen keeps showing the old one, and it will not restore over the change while the game relaunches its window.
    */
+  suspend fun adjustSw(sw: Int): Result<Int> {
+    val target = sw.coerceIn(SW_MIN, SW_MAX)
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    val r = Hub.adb.setSmallestWidth(target)
+    holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    if (r.isSuccess) {
+      _state.update { it.copy(appliedSw = r.getOrNull()) }
+      Hub.log("Smallest width set to ${r.getOrNull()} by hand")
+    }
+    return r
+  }
+
+  /** For callers that think in raw density (the external API's SET_DPI and the binder API). Everything else uses [adjustSw]. */
   suspend fun adjustDpi(dpi: Int): Result<Int> {
     val target = dpi.coerceIn(72, 1000)
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
     val r = Hub.adb.setDensity(target)
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
     if (r.isSuccess) {
-      _state.update { it.copy(appliedDpi = target) }
-      Hub.log("DPI set to $target by hand")
+      val sw = Hub.adb.readDisplay().getOrNull()?.sw
+      if (sw != null) _state.update { it.copy(appliedSw = sw) }
+      Hub.log("Density set to $target by hand")
     }
     return r
   }
 
-  /** Reads the real density and size again after something outside the engine changed them (terminal, scripts, other apps). */
+  /** Reads the real width and size again after something outside the engine changed them (terminal, scripts, other apps). */
   suspend fun syncFromDevice() {
-    val d = Hub.adb.readDensity().getOrNull()
-    val z = Hub.adb.readSize().getOrNull()
-    if (z != null && z.overrideText == null) {
+    val d = Hub.adb.readDisplay().getOrNull()
+    if (d != null && d.ovrW == null) {
       val snap = readSnap()
       if (snap.has("size")) { snap.remove("size"); writeSnap(snap) }
     }
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
-    _state.update { it.copy(appliedDpi = d?.effective ?: it.appliedDpi, stretched = if (z != null) z.overrideText != null else it.stretched) }
+    _state.update { it.copy(appliedSw = d?.sw ?: it.appliedSw, stretched = if (d != null) d.ovrW != null else it.stretched) }
   }
 
   /** One-tap RAM clean from the app or the floating panel. Returns a short sentence to show. */
   suspend fun optimizeNow(): String = Optimizer.cleanRam()
 
+  /**
+   * Runs a screen-size change and then puts the smallest width back to what it was. Without this, changing the size to a
+   * shape with a shorter side would quietly change the width the user chose.
+   */
+  private suspend fun <T> keepingWidth(block: suspend () -> T): T {
+    val before = Hub.adb.readDisplay().getOrNull()?.sw
+    val out = block()
+    if (before != null && before > 0) {
+      val now = Hub.adb.readDisplay().getOrNull()?.sw
+      if (now != null && now != before) {
+        val r = Hub.adb.setSmallestWidth(before)
+        if (r.isSuccess) _state.update { it.copy(appliedSw = r.getOrNull()) }
+      }
+    }
+    return out
+  }
+
   /** Floating-panel action: stretch on/off for the game that is open right now. */
   suspend fun toggleStretch(): Boolean {
-    if (_state.value.stretched) { restoreSizeOnly(); return false }
+    if (_state.value.stretched) { keepingWidth { restoreSizeOnly() }; return false }
     val st = active?.stretch
     val (w, h) = if (st != null && st.on && st.w > 0 && st.h > 0) Pair(st.w, st.h) else globalSize()
     return stretchNow(w, h)
@@ -315,15 +410,17 @@ class Engine(private val app: Context) {
     if (w !in 320..4096 || h !in 320..4096) { Hub.log("Stretch skipped: ${w}x$h is out of range"); return false }
     Hub.prefs.edit().putInt("stretchW", w).putInt("stretchH", h).apply()
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
-    val ok = applyStretch(w, h)
+    val ok = keepingWidth { applyStretch(w, h) }
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
     return ok
   }
 
   /** Puts the screen size back to what it was before stretching (or to the system default). */
   suspend fun unstretch() {
-    val snap = readSnap()
-    if (snap.has("size")) restoreSizeOnly() else { Hub.adb.resetSize(); _state.update { it.copy(stretched = false) } }
+    keepingWidth {
+      val snap = readSnap()
+      if (snap.has("size")) restoreSizeOnly() else { Hub.adb.resetSize(); _state.update { it.copy(stretched = false) } }
+    }
   }
 
   private fun readSnap(): JSONObject = JSONObject(Hub.prefs.getString("snap", "{}") ?: "{}")
@@ -378,7 +475,7 @@ class Engine(private val app: Context) {
 
   /** The optimizer's per-game changes. Each one is recorded in the snapshot first, so closing the game puts everything back. */
   private suspend fun applyOptimizer(o: OptCfg, pkg: String) {
-    if (!o.ram && !o.anim && !o.net && !o.gameMode) return
+    if (!o.ram && !o.anim && !o.net && !o.gameMode && !o.saver && !o.adaptive && o.scale <= 0f) return
     val snap = readSnap()
     suspend fun put(ns: String, k: String, v: String) {
       val key = "$ns/$k"
@@ -397,7 +494,11 @@ class Engine(private val app: Context) {
       put("global", "ble_scan_always_enabled", "0")
       if (!snap.has("lowlat") && Optimizer.lowLatencyWifi(true)) snap.put("lowlat", "1")
     }
+    // Battery saver and adaptive battery both hold the CPU back, so they are switched off while playing and put back afterwards.
+    if (o.saver) put("global", "low_power", "0")
+    if (o.adaptive) put("global", "adaptive_battery_management_enabled", "0")
     if (o.gameMode && !snap.has("gm") && Optimizer.setGameMode(pkg, true)) snap.put("gm", pkg)
+    if (o.scale > 0f && !snap.has("gs") && Optimizer.setRenderScale(pkg, o.scale)) snap.put("gs", pkg)
     writeSnap(snap)
   }
 
@@ -408,6 +509,7 @@ class Engine(private val app: Context) {
       if (key == "perf") { Hub.adb.exec("cmd power set-fixed-performance-mode-enabled false"); continue }
       if (key == "lowlat") { Optimizer.lowLatencyWifi(false); continue }
       if (key == "gm") { Optimizer.setGameMode(snap.getString(key), false); continue }
+      if (key == "gs") { Optimizer.resetRenderScale(snap.getString(key)); continue }
       if (key == "size") {
         val v = snap.getString(key)
         if (v == "reset") Hub.adb.resetSize() else Hub.adb.exec("wm size $v")
@@ -442,8 +544,11 @@ class Engine(private val app: Context) {
 
   companion object {
     const val GRACE_MS = 1_200L
-    /** How long after a DPI or size change the engine ignores a game briefly leaving the screen. */
+    /** How long after a width or size change the engine ignores a game briefly leaving the screen. */
     const val HOLD_MS = 6_000L
+    /** Sanity limits for a smallest width in dp. Android's own density limits (72 to 1000) apply on top of these. */
+    const val SW_MIN = 100
+    const val SW_MAX = 2400
   }
 }
 

@@ -47,7 +47,7 @@ class DensifyNativeModule : Module() {
     OnCreate {
       Hub.init(ctx)
       scope.launch { Hub.adb.state.collect { sendEvent("onAdb", mapOf("state" to it.name, "message" to it.message)) } }
-      scope.launch { Hub.engine.state.collect { sendEvent("onEngine", mapOf("running" to it.running, "appliedDpi" to it.appliedDpi, "activePkg" to it.activePkg, "errTitle" to it.errTitle, "errHint" to it.errHint)) } }
+      scope.launch { Hub.engine.state.collect { sendEvent("onEngine", mapOf("running" to it.running, "appliedSw" to it.appliedSw, "activePkg" to it.activePkg, "errTitle" to it.errTitle, "errHint" to it.errHint)) } }
     }
     OnDestroy { scope.cancel() }
 
@@ -129,6 +129,14 @@ class DensifyNativeModule : Module() {
     // ---- density ----
     AsyncFunction("readDensity") { promise: Promise -> run(promise) { val d = Hub.adb.readDensity().orThrow(); mapOf("physical" to d.physical, "effective" to d.effective) } }
     AsyncFunction("setDensity") { dpi: Int, promise: Promise -> run(promise) { Hub.engine.adjustDpi(dpi).orThrow() } }
+    // Smallest width (dp), the number Developer options shows. Converted to a density only at the moment it is applied.
+    AsyncFunction("readSw") { promise: Promise ->
+      run(promise) {
+        val d = Hub.adb.readDisplay().orThrow()
+        mapOf("sw" to d.sw, "physSw" to d.physSw, "dpi" to d.dpi, "physDpi" to d.physDpi, "shortSide" to d.shortSide)
+      }
+    }
+    AsyncFunction("setSw") { sw: Int, promise: Promise -> run(promise) { Hub.engine.adjustSw(sw).orThrow() } }
     AsyncFunction("restoreDefault") { promise: Promise -> run(promise) { Hub.engine.restoreAll().orThrow() } }
 
     // ---- screen size (stretch) ----
@@ -187,6 +195,7 @@ class DensifyNativeModule : Module() {
     Function("perfLive") { Perf.noteAppPoll(); Perf.latest.toJson().toString() }
     Function("perfSessions") { Perf.sessionsJson() }
     Function("perfClear") { Perf.clearSessions(); true }
+    AsyncFunction("compileApp") { pkg: String, promise: Promise -> run(promise) { Optimizer.compileApp(pkg) } }
     AsyncFunction("optimizeNow") { promise: Promise -> run(promise) { Hub.engine.optimizeNow() } }
     Function("sessionReset") { Hub.adb.resetSession(); true }
     AsyncFunction("listPackages") { promise: Promise ->
@@ -211,6 +220,21 @@ class DensifyNativeModule : Module() {
     AsyncFunction("enableBridge") { promise: Promise -> run(promise) { Hub.adb.enableBridge().orThrow(); true } }
     AsyncFunction("disableBridge") { promise: Promise -> run(promise) { Hub.adb.disableBridge(); true } }
     AsyncFunction("disconnect") { promise: Promise -> run(promise) { Hub.adb.disconnect(); true } }
+
+    // ---- screen recorder ----
+    Function("recStatus") { RecState.toJson() }
+    Function("recCaps") { RecPlan.capsJson() }
+    Function("recPlan") { w: Int, h: Int ->
+      val m = if (w > 0 && h > 0) null else realMetrics(ctx)
+      val p = RecPlan.make(RecCfg.load(), m?.widthPixels ?: w, m?.heightPixels ?: h)
+      org.json.JSONObject().put("w", p.w).put("h", p.h).put("fps", p.fps).put("mbps", p.bitrate / 1_000_000).put("hevc", p.hevc).put("label", p.label)
+        .put("notes", org.json.JSONArray(p.notes)).toString()
+    }
+    Function("recStart") { RecorderService.startFlow(ctx); true }
+    Function("recPause") { RecorderService.send(ctx, RecorderService.ACTION_PAUSE); true }
+    Function("recResume") { RecorderService.send(ctx, RecorderService.ACTION_RESUME); true }
+    Function("recStop") { RecorderService.send(ctx, RecorderService.ACTION_STOP); true }
+    Function("recOpenLast") { RecorderService.openLast(ctx) }
 
     // ---- monitoring ----
     Function("startMonitoring") { MonitorService.start(ctx); true }

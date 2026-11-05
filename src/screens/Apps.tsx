@@ -35,7 +35,7 @@ export function Apps() {
       {list.length === 0 && <Surface pad={18}><T v="sub">No app has asked yet. An app asks by binding to Densify's service (see Developer). It then appears here so you can allow or deny it.</T></Surface>}
       {asking.length > 0 && (<><Section title="Waiting for you" /><Group>{asking.map(row)}</Group></>)}
       {known.length > 0 && (<><Section title="Decided" /><Group>{known.map(row)}</Group></>)}
-      <T v="sub" c={t.c.mu} style={{ margin: 10 }}>An allowed app can run shell commands and change DPI through Densify. Only allow apps you trust.</T>
+      <T v="sub" c={t.c.mu} style={{ margin: 10 }}>An allowed app can run shell commands and change the display through Densify. Only allow apps you trust.</T>
     </Screen>
   );
 }

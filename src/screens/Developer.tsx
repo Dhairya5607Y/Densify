@@ -62,17 +62,17 @@ export function Developer() {
       <Section title="Apps" />
       <Group><Row leadIcon="apps" title="App access" sub="Allow or deny apps that bind to Densify's service" onPress={() => nav.push({ name: 'apps' })} right={<Icon name="chevron-right" />} /></Group>
       <T v="sub" style={{ margin: 10, fontFamily: 'monospace', fontSize: 12 }}>
-        Client: bindService(Intent("com.densify.app.api.BIND").setPackage("com.densify.app")). Then binder.transact(1, data, reply, 0) with data.writeInterfaceToken("com.densify.app.IDensifyApi") and data.writeString(cmd). Codes: 1 exec, 2 setDensity, 3 restore, 4 ping.
+        Client: bindService(Intent("com.densify.app.api.BIND").setPackage("com.densify.app")). Then binder.transact(1, data, reply, 0) with data.writeInterfaceToken("com.densify.app.IDensifyApi") and data.writeString(cmd). Codes: 1 exec, 2 setDensity (raw dpi), 3 restore, 4 ping, 5 setSmallestWidth.
       </T>
       <Section title="External API" />
       <Group>
-        <Row leadIcon="api" title="Allow other apps" sub="Tasker and similar apps can set DPI with a token" right={<AppSwitch on={state.externalApi} onChange={toggleApi} />} />
+        <Row leadIcon="api" title="Allow other apps" sub="Tasker and similar apps can set the smallest width with a token" right={<AppSwitch on={state.externalApi} onChange={toggleApi} />} />
         {state.externalApi && <Row leadIcon="key" title="Token" sub={state.apiToken || '—'} right={<Btn v="tonal" label="New" onPress={newToken} />} />}
       </Group>
       {state.externalApi && (
         <T v="sub" style={{ margin: 10, fontFamily: 'monospace', fontSize: 12 }}>
-          am broadcast -a com.densify.app.action.SET_DPI -n com.densify.app/expo.modules.densifynative.ExternalReceiver --ei dpi 420 --es token {state.apiToken}
-          {'\n'}Also: com.densify.app.action.RESTORE and com.densify.app.action.TOGGLE_STRETCH
+          am broadcast -a com.densify.app.action.SET_SW -n com.densify.app/expo.modules.densifynative.ExternalReceiver --ei sw 420 --es token {state.apiToken}
+          {'\n'}Also: com.densify.app.action.SET_DPI (--ei dpi, raw density), com.densify.app.action.RESTORE and com.densify.app.action.TOGGLE_STRETCH
         </T>
       )}
       <Sheet visible={!!confirm} onClose={() => setConfirm(null)}>

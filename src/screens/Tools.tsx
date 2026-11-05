@@ -15,7 +15,7 @@ const FAQ: [string, string][] = [
   ['Connection drops after a while', 'Turn on "Disable adb authorization timeout" in Developer options, and keep Reconnect automatically on in Settings.'],
   ['Densify stops in the background', 'Set battery to Unrestricted for Densify. On Xiaomi, Oppo, Vivo, Huawei and Samsung also allow Auto-start and lock the app in Recents.'],
   ['Pairing notification does not appear', 'Allow notifications, then open Wireless Debugging > Pair device with pairing code and reply from the notification.'],
-  ['Screen looks wrong after stretch', 'Open the floating panel or notification and tap Restore. This resets size and DPI together.'],
+  ['Screen looks wrong after stretch', 'Open the floating panel or notification and tap Restore. This resets size and smallest width together.'],
   ['Floating panel does not show', 'Allow display over other apps, set Floating panel to In games, and make sure monitoring is on.'],
 ];
 

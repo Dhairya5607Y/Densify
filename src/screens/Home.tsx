@@ -31,15 +31,15 @@ export function Home() {
   const [sheet, setSheet] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const connected = adb.state === 'connected';
-  useEffect(() => { if (connected) api.readDensity().then((d) => setCur(d.effective)).catch(() => {}); }, [connected, eng.appliedDpi]);
-  const shown = eng.appliedDpi ?? cur ?? state.defaultDpi;
+  useEffect(() => { if (connected) api.readSw().then((d) => setCur(d.sw)).catch(() => {}); }, [connected, eng.appliedSw]);
+  const shown = eng.appliedSw ?? cur ?? state.defaultSw;
   const activeName = eng.activePkg ? state.profiles.find((p) => p.pkg === eng.activePkg)?.name : null;
   const lowBat = state.lowBattery && !bat.charging && bat.level < state.lowBatteryPercent;
 
-  const restore = () => api.restoreDefault().then((v) => { setCur(v); log(`Restored ${v} DPI`, 'Manual'); toast({ title: `Restored ${v} DPI` }); })
-    .catch((e: Error) => toast({ title: `Couldn't restore ${state.defaultDpi || 'default'} DPI`, sub: e.message || 'Check your Wireless Debugging connection.', err: true, action: { label: 'Retry', run: restore } }));
-  const detect = () => api.readDensity().then((d) => { update((s) => ({ ...s, defaultDpi: d.physical })); toast({ title: `Detected ${d.physical} DPI`, sub: "Your phone's own DPI, saved as your default." }); })
-    .catch((e: Error) => toast({ title: "Couldn't read the current DPI", sub: e.message, err: true, action: { label: 'Retry', run: detect } }));
+  const restore = () => api.restoreDefault().then((v) => { setCur(v); log(`Restored smallest width ${v}`, 'Manual'); toast({ title: `Restored smallest width ${v}` }); })
+    .catch((e: Error) => toast({ title: `Couldn't restore ${state.defaultSw || 'default'} smallest width`, sub: e.message || 'Check your Wireless Debugging connection.', err: true, action: { label: 'Retry', run: restore } }));
+  const detect = () => api.readSw().then((d) => { update((s) => ({ ...s, defaultSw: d.physSw })); toast({ title: `Detected smallest width ${d.physSw}`, sub: "Your phone's own, saved as your default." }); })
+    .catch((e: Error) => toast({ title: "Couldn't read the current smallest width", sub: e.message, err: true, action: { label: 'Retry', run: detect } }));
   const toggleAuto = async (v: boolean) => {
     if (v) { if (!(await ensure('automation'))) return; update((s) => ({ ...s, automation: true })); api.startMonitoring(); }
     else { update((s) => ({ ...s, automation: false })); api.stopMonitoring(); }
@@ -51,19 +51,19 @@ export function Home() {
       <Header title="Densify" sub="Display automation" right={<Pressable onPress={() => nav.setTab('settings')} hitSlop={10}><Icon name="tune" size={24} color={t.c.tx2} /></Pressable>} />
       <Surface pad={20} style={{ paddingBottom: 6 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <T v="sub" style={{ fontSize: 13.5 }}>Current density</T>
+          <T v="sub" style={{ fontSize: 13.5 }}>Smallest width</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, height: 26, borderRadius: 13, backgroundColor: t.c.sf2 }}>
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: chip[1] }} /><T v="sub" c={chip[1]} w="600" style={{ fontSize: 12 }}>{chip[0]}</T>
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 18 }}>
           {shown > 0 ? <AnimatedNumber value={shown} style={{ fontSize: 84, fontWeight: '500', letterSpacing: -4, color: t.c.tx, fontFamily: t.mono ? 'monospace' : undefined }} /> : <T v="num">—</T>}
-          <T v="sub" style={{ marginLeft: 8, fontSize: 15 }}>dpi</T>
+          <T v="sub" style={{ marginLeft: 8, fontSize: 15 }}>dp</T>
         </View>
-        <Ruler value={shown || 480} def={state.defaultDpi} />
+        <Ruler value={shown || 480} def={state.defaultSw} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginHorizontal: -8 }}>
-          <T v="sub" style={{ marginLeft: 8, fontSize: 13.5 }}>{activeName ? `${activeName} profile` : state.defaultDpi ? 'System default' : 'Default not set'}</T>
-          <Btn v="text" label="Restore default" disabled={!connected || !state.defaultDpi || shown === state.defaultDpi} onPress={restore} />
+          <T v="sub" style={{ marginLeft: 8, fontSize: 13.5 }}>{activeName ? `${activeName} profile` : state.defaultSw ? `Default ${state.defaultSw}` : 'Phone default'}</T>
+          <Btn v="text" label="Restore default" disabled={!connected || (state.defaultSw > 0 && shown === state.defaultSw)} onPress={restore} />
         </View>
       </Surface>
 
@@ -71,18 +71,18 @@ export function Home() {
 
       {!connected && (api.isPaired() && state.mode !== 'root' && state.mode !== 'shizuku'
         ? <Banner icon="link" title="Reconnecting to Android…" sub="Densify is already set up and reconnects by itself when Wi-Fi is on." action="Retry" onAction={() => api.connect().catch((e: Error) => toast({ title: "Couldn't connect yet", sub: e.message, err: true }))} />
-        : <Banner icon="link" title="Wireless Debugging isn't connected" sub="Densify can't change DPI until it is." action="Set up" onAction={() => nav.push({ name: 'setup' })} />)}
-      {connected && !state.defaultDpi && <Banner icon="tune" title="Set your default DPI" sub="Densify returns to this value after every game." action="Detect" onAction={detect} />}
+        : <Banner icon="link" title="Wireless Debugging isn't connected" sub="Densify can't change the smallest width until it is." action="Set up" onAction={() => nav.push({ name: 'setup' })} />)}
+      {connected && !state.defaultSw && <Banner icon="tune" title="Set your default smallest width" sub="Densify returns to this value after every game." action="Detect" onAction={detect} />}
       {lowBat && !dismissed && <Banner icon="battery-alert" title={`Battery at ${bat.level}%`} sub="Games drain faster at this level. Plug in to keep your session going." action="Dismiss" onAction={() => setDismissed(true)} />}
 
       <Section title="Automation" />
-      <Group><Row leadIcon="bolt" title="Automatic switching" sub={state.automation ? `Watching ${state.profiles.length} game${state.profiles.length === 1 ? '' : 's'}` : 'Paused. Games keep your current DPI.'} right={<AppSwitch on={state.automation} onChange={toggleAuto} />} /></Group>
+      <Group><Row leadIcon="bolt" title="Automatic switching" sub={state.automation ? `Watching ${state.profiles.length} game${state.profiles.length === 1 ? '' : 's'}` : 'Paused. Games keep your current smallest width.'} right={<AppSwitch on={state.automation} onChange={toggleAuto} />} /></Group>
 
       <Section title="Profiles" action="View all" onAction={() => nav.setTab('games')} />
       <Group>
         {state.profiles.map((p) => (
           <Row key={p.pkg} lead={<AppIcon pkg={p.pkg} name={p.name} />} title={p.name} sub={p.auto ? 'Auto switching on' : 'Auto switching off'} onPress={() => nav.push({ name: 'profile', pkg: p.pkg, label: p.name })}
-            right={<View style={{ alignItems: 'flex-end' }}><T style={{ fontSize: 17 }}>{p.dpi}</T><T v="sub" style={{ fontSize: 11.5 }}>DPI</T></View>} />
+            right={<View style={{ alignItems: 'flex-end' }}><T style={{ fontSize: 17 }}>{p.sw}</T><T v="sub" style={{ fontSize: 11.5 }}>SW</T></View>} />
         ))}
         <Row leadIcon="add" title={<T c={t.c.ac}>Add game</T>} onPress={() => setSheet(true)} />
       </Group>

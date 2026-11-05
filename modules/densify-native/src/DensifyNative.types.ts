@@ -1,6 +1,6 @@
 export type AdbState = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type AdbEvent = { state: AdbState; message?: string | null };
-export type EngineEvent = { running: boolean; appliedDpi?: number | null; activePkg?: string | null; errTitle?: string | null; errHint?: string | null };
+export type EngineEvent = { running: boolean; appliedSw?: number | null; activePkg?: string | null; errTitle?: string | null; errHint?: string | null };
 export type InstalledApp = { pkg: string; name: string; isGame: boolean };
 export type Capabilities = { hz: number; perf: boolean; guard: boolean; tile: boolean };
 export type SettingsKind = 'usage' | 'developer' | 'overlay' | 'battery' | 'notifications' | 'settings';
@@ -27,6 +27,8 @@ export interface NativeApi {
   grantSelf(): Promise<boolean>;
   capabilities(): Promise<Capabilities>;
   readDensity(): Promise<{ physical: number; effective: number }>;
+  readSw(): Promise<{ sw: number; physSw: number; dpi: number; physDpi: number; shortSide: number }>;
+  setSw(sw: number): Promise<number>;
   setDensity(dpi: number): Promise<number>;
   restoreDefault(): Promise<number>;
   readSize(): Promise<{ physW: number; physH: number; override: string | null }>;
@@ -61,4 +63,13 @@ export interface NativeApi {
   perfSessions(): string;
   perfClear(): boolean;
   optimizeNow(): Promise<string>;
+  compileApp(pkg: string): Promise<string>;
+  recStatus(): string;
+  recCaps(): string;
+  recPlan(w: number, h: number): string;
+  recStart(): boolean;
+  recPause(): boolean;
+  recResume(): boolean;
+  recStop(): boolean;
+  recOpenLast(): boolean;
 }

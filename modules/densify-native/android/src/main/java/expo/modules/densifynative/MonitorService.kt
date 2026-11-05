@@ -34,19 +34,20 @@ class MonitorService : Service() {
       ACTION_UP, ACTION_DOWN -> {
         val delta = if (intent.action == ACTION_UP) 10 else -10
         Hub.scope.launch {
-          val cur = Hub.adb.readDensity().getOrNull()?.effective ?: return@launch
-          Hub.engine.adjustDpi(cur + delta)
+          // Smallest width, as in Developer options: +10 gives more room (smaller UI), -10 gives bigger UI.
+          val cur = Hub.adb.readDisplay().getOrNull()?.sw ?: Hub.engine.state.value.appliedSw ?: return@launch
+          Hub.engine.adjustSw(cur + delta)
         }
         return START_STICKY
       }
       ACTION_STOP -> { shutdown(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
     }
-    val first = build("Densify is running", "Tap an action to change DPI.")
+    val first = build("Densify is running", "Tap an action to change smallest width.")
     if (Build.VERSION.SDK_INT >= 34) startForeground(Notifs.ID_MONITOR, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(Notifs.ID_MONITOR, first)
     Hub.scope.launch {
       if (!Hub.adb.isConnected) Hub.adb.connect(quiet = true)
       // Learn the phone's own density as early as possible: it is the safe value to restore to.
-      if (Hub.adb.isConnected) Hub.adb.readDensity()
+      if (Hub.adb.isConnected) Hub.engine.syncFromDevice()
       Hub.engine.start()
     }
     watchWifi()
@@ -58,11 +59,11 @@ class MonitorService : Service() {
       Hub.engine.state.collect { s ->
         val c = Hub.engine.config()
         val title = when {
-          s.activePkg != null -> "Playing · ${s.appliedDpi} DPI"
+          s.activePkg != null -> "Playing · SW ${s.appliedSw ?: "?"}"
           c.automation -> "Densify is watching ${c.profiles.size} game${if (c.profiles.size == 1) "" else "s"}"
           else -> "Densify is ready"
         }
-        val text = s.errTitle ?: "Default ${c.defaultDpi} DPI"
+        val text = s.errTitle ?: if (c.defaultSw > 0) "Default smallest width ${c.defaultSw}" else "Default: phone's own width"
         getSystemService(NotificationManager::class.java).notify(Notifs.ID_MONITOR, build(title, text))
       }
     }
@@ -103,12 +104,27 @@ class MonitorService : Service() {
           // The live stats readout is separate from the panel, so it can stay on while the panel is closed.
           val hudWanted = c.hud == "always" || (c.hud == "gaming" && game != null)
           if (hudWanted && canDraw) { Perf.acquire("hud"); overlay.show(c.hudPos, c.hudFields) } else { Perf.release("hud"); overlay.hide() }
+          syncRecNotif()
+          panel.refreshTheme(c.theme)
           // If the engine loop ever died, bring it back.
           Hub.engine.ensureRunning()
         }
         delay(if (forced0()) 500 else 800)
       }
     }
+  }
+
+  /** A small "Start recording" notification that is shown while idle, so recording can be started without opening anything. */
+  private var idleShown = false
+  private fun syncRecNotif() {
+    val want = RecState.state == "idle" && RecCfg.load().notif
+    if (want == idleShown) return
+    idleShown = want
+    val nm = getSystemService(NotificationManager::class.java)
+    if (!want) { nm.cancel(Notifs.ID_REC_IDLE); return }
+    val n = Notifs.builder(this, Notifs.CHANNEL_REC).setContentTitle("Screen recorder").setContentText("Tap Start to record the screen.")
+      .setOngoing(true).addAction(Notifs.recStartAction(this, "Start", 20)).build()
+    runCatching { nm.notify(Notifs.ID_REC_IDLE, n) }
   }
 
   private fun forced0() = SystemClock.elapsedRealtime() < Hub.floatForceUntil
@@ -138,6 +154,8 @@ class MonitorService : Service() {
     linkJob?.cancel()
     floating?.hide()
     hud?.hide()
+    runCatching { getSystemService(NotificationManager::class.java).cancel(Notifs.ID_REC_IDLE) }
+    idleShown = false
     Perf.release("hud")
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null
@@ -155,8 +173,8 @@ class MonitorService : Service() {
   }
 
   private fun build(title: String, text: String) = Notifs.builder(this).setContentTitle(title).setContentText(text).setOngoing(true)
-    .addAction(Notifs.action(this, "−10", ACTION_DOWN, 11))
-    .addAction(Notifs.action(this, "+10", ACTION_UP, 12))
+    .addAction(Notifs.action(this, "SW −10", ACTION_DOWN, 11))
+    .addAction(Notifs.action(this, "SW +10", ACTION_UP, 12))
     .addAction(Notifs.action(this, "Restore", ACTION_RESTORE, 13)).build()
 
   companion object {

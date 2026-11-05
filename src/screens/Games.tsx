@@ -17,7 +17,7 @@ export function Games() {
   const list = appFilter(apps, f, q, new Set(cfg.keys()));
   return (
     <Screen tab>
-      <Header title="Games" sub="Manage your DPI profiles" />
+      <Header title="Games" sub="Manage your game profiles" />
       <SearchBar value={q} onChange={setQ} placeholder="Search games…" />
       <View style={{ flexDirection: 'row', gap: 8, marginVertical: 12 }}>
         <Chip h={38} label="Games" on={f === 'games'} onPress={() => setF('games')} />
@@ -28,7 +28,7 @@ export function Games() {
       {list.length === 0 ? <Empty text={emptyApps(f)} /> : (
         <Group>{list.map((a) => {
           const p = cfg.get(a.pkg);
-          return <Row key={a.pkg} lead={<AppIcon pkg={a.pkg} name={a.name} />} title={a.name} sub={p ? `${p.dpi} DPI · ${p.auto ? 'Active' : 'Auto off'}` : a.pkg} onPress={() => nav.push({ name: 'profile', pkg: a.pkg, label: a.name })} right={<Icon name="chevron-right" />} />;
+          return <Row key={a.pkg} lead={<AppIcon pkg={a.pkg} name={a.name} />} title={a.name} sub={p ? `SW ${p.sw} · ${p.auto ? 'Active' : 'Auto off'}` : a.pkg} onPress={() => nav.push({ name: 'profile', pkg: a.pkg, label: a.name })} right={<Icon name="chevron-right" />} />;
         })}</Group>
       )}
       <T v="sub" style={{ textAlign: 'center', margin: 22, lineHeight: 19 }}>Densify reads your installed apps and marks games using Android's app category. If a game is missing, choose All apps.</T>
