@@ -53,7 +53,7 @@ private class Session(val pkg: String, val name: String, val start: Long) {
   var cpuSum = 0L; var cpuN = 0
   var tempSum = 0.0; var tempN = 0; var tempMax = 0f
   var ramSum = 0L; var ramN = 0
-  var pingSum = 0L; var pingN = 0
+  var pingSum = 0L; var pingN = 0; var pingMin = Int.MAX_VALUE; var pingMax = 0
   var count = 0
 
   fun add(s: PerfSample) {
@@ -67,7 +67,7 @@ private class Session(val pkg: String, val name: String, val start: Long) {
     if (s.cpu >= 0) { cpuSum += s.cpu; cpuN++ }
     if (s.tempC > 0f) { tempSum += s.tempC; tempN++; tempMax = max(tempMax, s.tempC) }
     if (s.ramPct >= 0) { ramSum += s.ramPct; ramN++ }
-    if (s.pingMs >= 0) { pingSum += s.pingMs; pingN++ }
+    if (s.pingMs >= 0) { pingSum += s.pingMs; pingN++; pingMin = min(pingMin, s.pingMs); pingMax = max(pingMax, s.pingMs) }
   }
 
   fun toJson(end: Long, live: Boolean): JSONObject {
@@ -81,6 +81,7 @@ private class Session(val pkg: String, val name: String, val start: Long) {
       .put("tempAvg", if (tempN == 0) -1.0 else Math.round(tempSum / tempN * 10) / 10.0).put("tempMax", if (tempN == 0) -1.0 else tempMax.toDouble())
       .put("ramAvg", if (ramN == 0) -1 else (ramSum.toDouble() / ramN).roundToInt())
       .put("pingAvg", if (pingN == 0) -1 else (pingSum.toDouble() / pingN).roundToInt())
+      .put("pingMin", if (pingN == 0) -1 else pingMin).put("pingMax", if (pingN == 0) -1 else pingMax)
   }
 }
 
@@ -301,9 +302,11 @@ object Perf {
   }
 
   private suspend fun readPing(): Int {
-    val out = Hub.adb.exec("ping -c 1 -W 1 8.8.8.8 2>/dev/null").getOrNull() ?: return -1
-    val ms = Regex("time[=<]([0-9.]+)").find(out)?.groupValues?.get(1)?.toFloatOrNull() ?: return -1
-    return ms.roundToInt()
+    // Three quick packets, averaged: a single packet made the reading swing between ~9 and ~18 ms on its own.
+    val out = Hub.adb.exec("ping -c 3 -i 0.2 -W 1 8.8.8.8 2>/dev/null").getOrNull() ?: return -1
+    val all = Regex("time[=<]([0-9.]+)").findAll(out).mapNotNull { it.groupValues[1].toFloatOrNull() }.toList()
+    if (all.isEmpty()) return -1
+    return all.average().roundToInt()
   }
 
   // ---------- sessions ----------

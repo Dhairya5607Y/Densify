@@ -296,13 +296,18 @@ class FloatingPanel(private val ctx: Context) {
     val pn = LinearLayout(ctx).apply {
       orientation = LinearLayout.VERTICAL
       background = shape(withAlpha(t.bg, 0xF4), t.r, t.bw, t.bd)
-      setPadding(px(12f), px(10f), px(12f), px(10f))
+      setPadding(px(14f), px(8f), px(14f), px(14f))
+      elevation = px(10f).toFloat()
       visibility = View.GONE
     }
-    pn.layoutParams = LinearLayout.LayoutParams(px(272f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f) }
+    pn.layoutParams = LinearLayout.LayoutParams(px(288f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f) }
     panel = pn
 
     // Header stays put while the rest scrolls: drag handle, app name and Hide
+    // Drag grip: a small pill that shows the panel can be moved
+    val grip = View(ctx).apply { background = shape(withAlpha(t.mu, 0x88), 2f) }
+    pn.addView(grip, LinearLayout.LayoutParams(px(36f), px(4f)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = px(2f); bottomMargin = px(4f) })
+    attachDrag(grip, false)
     val header = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     header.addView(label("Densify", 11f, t.ac, true).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; letterSpacing = 0.14f }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     header.addView(label("Hide", 12.5f, t.mu, true).apply {
@@ -310,7 +315,7 @@ class FloatingPanel(private val ctx: Context) {
       setOnClickListener { dismissedKey = Hub.engine.state.value.activePkg ?: "always"; Hub.floatForceUntil = 0L; hide() }
     })
     attachDrag(header, false)
-    pn.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(4f) })
+    pn.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(8f) })
 
     val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
 

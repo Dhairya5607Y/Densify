@@ -13,13 +13,11 @@ import { ToastProvider } from './src/ui/overlays';
 import { ScrollDirProvider } from './src/ui/scroll';
 import { TabBar } from './src/ui/TabBar';
 import { Games } from './src/screens/Games';
-import { Home } from './src/screens/Home';
 import { Presets } from './src/screens/Presets';
 import { Profile } from './src/screens/Profile';
 import { Settings } from './src/screens/Settings';
 import { Stats } from './src/screens/Stats';
 import { Setup } from './src/screens/Setup';
-import { Scripts } from './src/screens/Scripts';
 import { Tools } from './src/screens/Tools';
 import { Plugins } from './src/screens/Plugins';
 import { PluginUI } from './src/screens/PluginUI';
@@ -50,8 +48,8 @@ function Shell() {
   return (
     <View style={{ flex: 1 }}>
       <Backdrop />
-      {nav.tab === 'home' && <Home />}
       {nav.tab === 'games' && <Games />}
+      {nav.tab === 'plugins' && <Plugins tab />}
       {nav.tab === 'stats' && <Stats />}
       {nav.tab === 'settings' && <Settings />}
       <TabBar tab={nav.tab} onTab={nav.setTab} />
@@ -63,8 +61,7 @@ function Shell() {
             {r.name === 'setup' && <Setup />}
             {r.name === 'presets' && <Presets />}
             {r.name === 'tools' && <Tools />}
-            {r.name === 'scripts' && <Scripts />}
-            {r.name === 'plugins' && <Plugins />}
+            
             {r.name === 'webui' && <PluginUI id={r.id} />}
             {r.name === 'developer' && <Developer />}
             {r.name === 'settingsEditor' && <SettingsEditor />}

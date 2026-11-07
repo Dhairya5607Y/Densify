@@ -13,6 +13,9 @@ import { useToast } from '../ui/overlays';
 import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
 import { Header, SearchBar } from './common';
+import { newScript, ScriptEditor, ScriptsSection } from './Scripts';
+import type { Script } from '../store/types';
+import { BUNDLED } from '../logic/bundled';
 
 const EXAMPLE = JSON.stringify({
   id: 'fast-animations', name: 'Fast animations', version: '1.0', author: 'you', desc: 'Speeds up system animations while gaming.',
@@ -36,10 +39,11 @@ export function parsePlugin(raw: string): Plugin {
   };
 }
 
-export function Plugins() {
+export function Plugins({ tab }: { tab?: boolean }) {
   const { state, update } = useStore();
   const t = useTheme(); const nav = useNav(); const toast = useToast(); const ensure = useEnsure();
   const [adding, setAdding] = useState(false);
+  const [script, setScript] = useState<Script | null>(null);
   const [q, setQ] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -89,6 +93,8 @@ export function Plugins() {
     update((s) => ({ ...s, plugins: s.plugins.filter((x) => x.id !== p.id) })); toast({ title: `${p.name} removed`, action: { label: 'Undo', run: () => update((s) => ({ ...s, plugins: [...s.plugins, p] })) } });
   };
 
+  if (script) return <ScriptEditor edit={script} setEdit={setScript} />;
+
   if (adding) {
     return (
       <Screen>
@@ -106,10 +112,18 @@ export function Plugins() {
   }
 
   return (
-    <Screen>
-      <Header title="Plugins" sub="Add-ons with actions, hooks and a WebUI" onBack={nav.back} right={<View style={{ flexDirection: 'row', gap: 6 }}><Btn v="tonal" label="JSON" onPress={() => setAdding(true)} /><Btn v="pri" label={busy ? step || '…' : 'Zip'} disabled={busy} onPress={pickZip} /></View>} />
+    <Screen tab={tab}>
+      <Header title="Plugins" sub="Plugins and scripts, in one place" onBack={tab ? undefined : nav.back} right={<View style={{ flexDirection: 'row', gap: 6 }}><Btn v="tonal" label="JSON" onPress={() => setAdding(true)} /><Btn v="pri" label={busy ? step || '…' : 'Zip'} disabled={busy} onPress={pickZip} /></View>} />
       {log ? <Surface pad={12} style={{ marginBottom: 14 }}><T v="sub" c={t.c.tx2} style={{ fontFamily: 'monospace', fontSize: 12 }}>{log}</T></Surface> : null}
       {state.plugins.length > 3 && <View style={{ marginBottom: 12 }}><SearchBar value={q} onChange={setQ} placeholder="Search plugins" /></View>}
+      {BUNDLED.filter((b) => !state.plugins.some((x) => x.id === b.id)).length > 0 && (<>
+        <Section title="Included with Densify" />
+        <Group>{BUNDLED.filter((b) => !state.plugins.some((x) => x.id === b.id)).map((b) => (
+          <Row key={b.id} leadIcon="extension" title={b.name} sub={`v${b.version} · ${b.author}\n${b.desc}`} minH={76}
+            right={<Btn v="tonal" label="Install" onPress={() => { update((x) => ({ ...x, plugins: [...x.plugins, { ...b.plugin, on: true }] })); toast({ title: `${b.name} installed` }); }} />} />
+        ))}</Group>
+      </>)}
+      <Section title="Installed" />
       {state.plugins.length === 0 ? (
         <Surface pad={18}><T v="sub">No plugins installed. Tap Zip to install an AxManager or KernelSU-style module (module.prop, customize.sh, service.sh, action.sh, webroot). JSON lets you write a small plugin by hand.</T></Surface>
       ) : state.plugins.filter((p) => (p.name + p.id + p.author + p.desc).toLowerCase().includes(q.trim().toLowerCase())).map((p) => (
@@ -124,6 +138,9 @@ export function Plugins() {
           </Group>
         </View>
       ))}
+      <Section title="Scripts" action="New script" onAction={() => setScript(newScript())} />
+      <ScriptsSection onEdit={setScript} />
+      {state.scripts.length > 1 ? <View style={{ marginTop: 8 }}><Btn v="text" label="Delete all scripts" onPress={() => update((x) => ({ ...x, scripts: [] }))} /></View> : null}
     </Screen>
   );
 }

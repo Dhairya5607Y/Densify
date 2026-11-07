@@ -4,7 +4,7 @@ import { api } from '../native/api';
 
 /** One live reading. -1 means this phone does not expose that number. */
 export type PerfSample = { at: number; pkg: string | null; fps: number; cpu: number; tempC: number; battC: number; ramPct: number; ramFreeMb: number; pingMs: number; cpuMhz: number };
-export type PerfSession = { pkg: string; name: string; start: number; durMs: number; samples: number; live: boolean; fpsAvg: number; fps1: number; fpsMin: number; fpsMax: number; cpuAvg: number; tempAvg: number; tempMax: number; ramAvg: number; pingAvg: number };
+export type PerfSession = { pkg: string; name: string; start: number; durMs: number; samples: number; live: boolean; fpsAvg: number; fps1: number; fpsMin: number; fpsMax: number; cpuAvg: number; tempAvg: number; tempMax: number; ramAvg: number; pingAvg: number; pingMin?: number; pingMax?: number };
 
 export const EMPTY_SAMPLE: PerfSample = { at: 0, pkg: null, fps: -1, cpu: -1, tempC: -1, battC: -1, ramPct: -1, ramFreeMb: -1, pingMs: -1, cpuMhz: -1 };
 

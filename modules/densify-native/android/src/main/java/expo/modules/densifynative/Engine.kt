@@ -492,7 +492,10 @@ class Engine(private val app: Context) {
       // Fewer background radio scans means fewer ping spikes mid-match.
       put("global", "wifi_scan_always_enabled", "0")
       put("global", "ble_scan_always_enabled", "0")
-      if (!snap.has("lowlat") && Optimizer.lowLatencyWifi(true)) snap.put("lowlat", "1")
+      val had = snap.has("lowlat")
+      val ll = had || Optimizer.lowLatencyWifi(true)
+      if (ll && !had) snap.put("lowlat", "1")
+      Hub.log(if (ll) "Network boost on: low-latency Wi-Fi and fewer radio scans" else "Network boost: this phone has no low-latency Wi-Fi switch, only the scan changes were applied")
     }
     // Battery saver and adaptive battery both hold the CPU back, so they are switched off while playing and put back afterwards.
     if (o.saver) put("global", "low_power", "0")

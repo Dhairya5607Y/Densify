@@ -77,6 +77,18 @@ export function Stats() {
     if (v > 0 && !(await ensure('perf'))) return;
     setPerf((x) => ({ ...x, opt: { ...x.opt, scale: v } }));
   };
+  const [net, setNet] = useState('');
+  const [netBusy, setNetBusy] = useState(false);
+  const testNet = async () => {
+    if (!(await ensure('shell'))) return;
+    setNetBusy(true); setNet('');
+    try {
+      const out = await api.shell('ping -c 20 -i 0.2 -W 1 8.8.8.8 2>&1');
+      const m = out.match(/= ([0-9.]+)\/([0-9.]+)\/([0-9.]+)/); const loss = out.match(/([0-9.]+)% packet loss/);
+      setNet(m ? `Low ${Math.round(+m[1])} · avg ${Math.round(+m[2])} · high ${Math.round(+m[3])} ms · ${loss ? loss[1] : 0}% loss` : "Couldn't reach the internet from this phone.");
+    } catch (e) { toast({ title: "Couldn't test the network", sub: (e as Error).message, err: true }); }
+    setNetBusy(false);
+  };
   const clean = async () => {
     if (busy || !(await ensure('perf'))) return;
     setBusy(true);
@@ -122,6 +134,7 @@ export function Stats() {
             <Metric label="Peak temp" value={last.tempMax >= 0 ? `${Math.round(last.tempMax)}°` : '—'} />
             <Metric label="Avg RAM" value={num(last.ramAvg, '%')} />
             <Metric label="Avg ping" value={num(last.pingAvg, ' ms')} />
+            <Metric label="Ping low / high" value={last.pingMin != null && last.pingMin >= 0 ? `${last.pingMin} / ${last.pingMax}` : '—'} />
           </View>
         </Surface>
       ) : (
@@ -150,7 +163,8 @@ export function Stats() {
         <Row leadIcon="memory" title="Clean RAM now" sub="Closes cached background apps and reports what it freed" onPress={clean} right={<Btn v="tonal" label={busy ? 'Working…' : 'Clean'} disabled={busy} onPress={clean} />} />
         <Row leadIcon="memory" title="Clean RAM when a game opens" sub="Frees memory right before the game starts" right={<AppSwitch on={p.opt.ram} onChange={(v) => setOpt('ram', v)} />} />
         <Row leadIcon="speed" title="Snappier animations" sub="Halves system animation time while you play, then puts it back" right={<AppSwitch on={p.opt.anim} onChange={(v) => setOpt('anim', v)} />} />
-        <Row leadIcon="wifi" title="Network boost" sub="Low-latency Wi-Fi mode and no background radio scans while you play" right={<AppSwitch on={p.opt.net} onChange={(v) => setOpt('net', v)} />} />
+        <Row leadIcon="wifi" title="Network boost" sub="Applies when a game from your list opens, on Wi-Fi: low-latency Wi-Fi mode and no background radio scans. Ping naturally varies a few ms from packet to packet." right={<AppSwitch on={p.opt.net} onChange={(v) => setOpt('net', v)} />} />
+        <Row leadIcon="wifi" title="Test network" sub={net || 'Sends 20 quick pings to see your real low, average, high and packet loss'} onPress={testNet} right={<Btn v="tonal" label={netBusy ? 'Testing…' : 'Test'} disabled={netBusy} onPress={testNet} />} />
         <Row leadIcon="sports-esports" title="System Game Mode: Performance" sub="Asks Android to run the game in its Performance mode (Android 12+ phones that support it)" right={<AppSwitch on={p.opt.gameMode} onChange={(v) => setOpt('gameMode', v)} />} />
         <Row leadIcon="battery-saver" title="Battery saver off while playing" sub="Turns Android's battery saver off so it doesn't throttle the CPU, then puts it back" right={<AppSwitch on={p.opt.saver} onChange={(v) => setOpt('saver', v)} />} />
         <Row leadIcon="battery-charging-full" title="Adaptive battery off while playing" sub="Stops Android from holding the game back in the background, then puts it back" right={<AppSwitch on={p.opt.adaptive} onChange={(v) => setOpt('adaptive', v)} />} />

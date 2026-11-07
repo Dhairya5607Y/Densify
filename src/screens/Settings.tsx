@@ -55,6 +55,16 @@ export function Settings() {
   return (
     <Screen tab>
       <Header title="Settings" sub="Configure Densify" />
+      <Pressable onPress={() => (state.mode === 'root' ? api.connect().catch((e: Error) => toast({ title: 'Root not available', sub: e.message, err: true })) : nav.push({ name: 'setup' }))}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 6, borderRadius: Math.min(t.r, 22), borderWidth: 1, borderColor: adb.state === 'connected' ? t.c.ok + '66' : t.c.wn + '66', backgroundColor: (adb.state === 'connected' ? t.c.ok : t.c.wn) + '1a' }}>
+        <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: t.c.sf2 }}><Icon name="link" size={24} color={adb.state === 'connected' ? t.c.ok : t.c.wn} /></View>
+        <View style={{ flex: 1 }}>
+          <T w="600" style={{ fontSize: 15.5 }}>{state.mode === 'root' ? 'Root access' : state.mode === 'tcpip' ? 'adb over network' : state.mode === 'shizuku' ? 'Shizuku' : 'Wireless Debugging'}</T>
+          <T v="sub" c={t.c.tx2}>{adb.state === 'connected' ? 'Connected. Densify can change your display.' : 'Not connected. Tap to set it up.'}</T>
+        </View>
+        <Btn v={adb.state === 'connected' ? 'tonal' : 'pri'} label={adb.state === 'connected' ? 'Manage' : 'Set up'} onPress={() => (state.mode === 'root' ? api.connect().catch(() => {}) : nav.push({ name: 'setup' }))} />
+      </Pressable>
+
       <Section title="Display" />
       <Group>
         <Row leadIcon="tune" title="Default smallest width" sub="What Densify returns to after a game. Same number as in Developer options." right={
@@ -92,7 +102,6 @@ export function Settings() {
 
       <Section title="Connection" />
       <Group>
-        <Row leadIcon="link" title={state.mode === 'root' ? 'Root access' : state.mode === 'tcpip' ? 'adb over network' : state.mode === 'shizuku' ? 'Shizuku' : 'Wireless Debugging'} sub={stateLabel[0]} right={<Btn v={adb.state === 'connected' ? 'tonal' : 'pri'} label={state.mode === 'root' ? 'Connect' : 'Setup'} onPress={() => (state.mode === 'root' ? api.connect().catch((e: Error) => toast({ title: 'Root not available', sub: e.message, err: true })) : nav.push({ name: 'setup' }))} />} />
         <Row leadIcon="admin-panel-settings" title="Connection method" sub={state.mode === 'root' ? 'Root' : state.mode === 'tcpip' ? 'From a computer (adb tcpip)' : state.mode === 'shizuku' ? 'Shizuku (no pairing needed)' : 'Wireless Debugging (Android 11+)'} below={
           ([['wireless', 'Wi-Fi'], ['shizuku', 'Shizuku'], ['tcpip', 'PC'], ['root', 'Root']] as const).map(([m, l]) => <Chip key={m} h={36} label={l} on={state.mode === m} onPress={() => { update((x) => ({ ...x, mode: m })); api.disconnect(); }} />)} />
         <Row leadIcon="wifi" title="Reconnect automatically" sub="Pairing is remembered. Densify switches Wireless Debugging back on and reconnects by itself, so setup is only needed again after a reinstall." right={<AppSwitch on={state.autoReconnect} onChange={(v) => update((x) => ({ ...x, autoReconnect: v }))} />} />
@@ -107,8 +116,6 @@ export function Settings() {
       <Section title="Tools" />
       <Group>
         <Row leadIcon="videocam" title="Screen recorder" sub="Light recorder, up to 4K 60 fps. Start, pause and stop from the notification." onPress={() => nav.push({ name: 'recorder' })} right={<Icon name="chevron-right" />} />
-        <Row leadIcon="code" title="Automation scripts" sub={`${state.scripts.length} script${state.scripts.length === 1 ? '' : 's'} · run when a game starts, exits or the phone boots`} onPress={() => nav.push({ name: 'scripts' })} right={<Icon name="chevron-right" />} />
-        <Row leadIcon="extension" title="Plugins" sub={`${state.plugins.length} installed · actions, hooks and WebUI`} onPress={() => nav.push({ name: 'plugins' })} right={<Icon name="chevron-right" />} />
         <Row leadIcon="developer-mode" title="Developer" sub="Tweaks, power menu, settings editor, external API" onPress={() => nav.push({ name: 'developer' })} right={<Icon name="chevron-right" />} />
         <Row leadIcon="terminal" title="Terminal, logs and backup" sub="Run shell commands, read activity, troubleshoot" onPress={() => nav.push({ name: 'tools' })} right={<Icon name="chevron-right" />} />
       </Group>

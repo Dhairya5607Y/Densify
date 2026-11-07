@@ -126,21 +126,21 @@ export function Setup() {
       )}
 
       <Section title="Choose a method" />
-      <View style={{ gap: 9 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {Object.entries(METHODS).map(([k, v]) => {
           const on = method === k;
           return (
-            <Pressable key={k} onPress={() => { tried.current = true; pick(k); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, minHeight: 78, borderRadius: Math.min(t.r, 22), borderWidth: 1.5, borderColor: on ? t.c.ac : t.c.bd, backgroundColor: on ? t.c.acs : t.c.sf }}>
-              <View style={{ width: 42, height: 42, borderRadius: t.surface === 'hud' ? 2 : 21, backgroundColor: t.c.acs, alignItems: 'center', justifyContent: 'center' }}><Icon name={v.icon} color={on ? t.c.ac : t.c.mu} /></View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><T>{v.title}</T>{recKey === k ? <T v="sub" c={t.c.ac} w="600" style={{ fontSize: 11.5 }}>RECOMMENDED</T> : null}</View>
-                <T v="sub">{v.desc}</T>
+            <Pressable key={k} onPress={() => { tried.current = true; pick(k); }} style={{ width: '48.5%', padding: 12, minHeight: 84, borderRadius: Math.min(t.r, 20), borderWidth: 1.5, borderColor: on ? t.c.ac : t.c.bd, backgroundColor: on ? t.c.acs : t.c.sf, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Icon name={v.icon} color={on ? t.c.ac : t.c.mu} />
+                {recKey === k ? <T v="sub" c={t.c.ac} w="600" style={{ fontSize: 10.5 }}>BEST</T> : null}
               </View>
-              <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: on ? t.c.ac : t.c.mu, alignItems: 'center', justifyContent: 'center' }}>{on && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.c.ac }} />}</View>
+              <T w="600" style={{ fontSize: 14 }}>{v.title.replace(' Method', '')}</T>
             </Pressable>
           );
         })}
       </View>
+      <T v="sub" c={t.c.tx2} style={{ marginHorizontal: 6, marginTop: 10 }}>{m.desc}</T>
 
       <Section title="Steps" />
       <Surface style={{ paddingVertical: 8 }}>
