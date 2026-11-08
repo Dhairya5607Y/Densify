@@ -274,7 +274,10 @@ class FloatingPanel(private val ctx: Context) {
     scale = physDensity()
     stats.clear()
     rawTheme = Hub.engine.config().theme
-    t = readable(rawTheme)
+    t = readable(rawTheme).let { r ->
+      if (!r.glass) r else if (r.dark) r.copy(sf = 0x26FFFFFF, sf2 = 0x3DFFFFFF, bd = 0x66FFFFFF)
+      else r.copy(sf = 0xA6FFFFFF.toInt(), sf2 = 0xD9FFFFFF.toInt(), bd = 0x33000000)
+    }
     val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.START }
 
     // The bubble is the Densify logo. Everything else lives in the panel it opens.
@@ -295,7 +298,7 @@ class FloatingPanel(private val ctx: Context) {
 
     val pn = LinearLayout(ctx).apply {
       orientation = LinearLayout.VERTICAL
-      background = shape(withAlpha(t.bg, 0xF4), t.r, t.bw, t.bd)
+      background = shape(withAlpha(t.bg, if (t.glass) 0xB0 else 0xF4), t.r, t.bw, t.bd)
       setPadding(px(14f), px(8f), px(14f), px(14f))
       elevation = px(10f).toFloat()
       visibility = View.GONE
@@ -587,6 +590,14 @@ class FloatingPanel(private val ctx: Context) {
   private fun setExpanded(on: Boolean) {
     expanded = on
     panel?.visibility = if (on) View.VISIBLE else View.GONE
+    // Liquid glass: blur what is behind the open panel (Android 12+ phones that support window blur)
+    if (t.glass && Build.VERSION.SDK_INT >= 31) {
+      lp?.let { p ->
+        p.flags = if (on) p.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND else p.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+        p.blurBehindRadius = if (on) px(26f) else 0
+        root?.let { r -> runCatching { wm.updateViewLayout(r, p) } }
+      }
+    }
     if (on) {
       // Keep the whole panel on screen: if the bubble sits low, slide it up so there is room to read, and the rest scrolls.
       val p = lp

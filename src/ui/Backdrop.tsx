@@ -40,14 +40,16 @@ function Glow({ size, color, style }: { size: number; color: string; style: obje
 export function Backdrop({ target }: { target?: boolean }) {
   const t = useTheme(); const ref = useContext(GlassCtx);
   if (!t.glass) return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg }]} />;
-  const second = t.dark ? '#7c5cff' : '#ff9ac8';
+  const ink = t.id === 'manga'; // Manga stays black and white: neutral grey light instead of a coloured glow
+  const tint = ink ? '#8a8a86' : t.c.ac;
+  const second = t.dark ? '#7c5cff' : t.id === 'paper' ? '#8cc8ff' : ink ? '#c4c4c0' : '#ff9ac8';
   const art = (
     <>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg }]} />
-      <LinearGradient pointerEvents="none" colors={[rgba(t.c.ac, t.dark ? 0.22 : 0.16), 'rgba(0,0,0,0)', rgba(second, t.dark ? 0.16 : 0.12)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <Glow size={360} color={rgba(t.c.ac, t.dark ? 0.045 : 0.035)} style={{ top: -120, left: -110 }} />
-      <Glow size={320} color={rgba(second, t.dark ? 0.04 : 0.03)} style={{ bottom: 40, right: -120 }} />
-      <Glow size={220} color={rgba(t.c.ac, t.dark ? 0.035 : 0.03)} style={{ top: '45%', left: -80 }} />
+      <LinearGradient pointerEvents="none" colors={[rgba(tint, t.dark ? 0.22 : 0.24), 'rgba(0,0,0,0)', rgba(second, t.dark ? 0.16 : 0.2)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <Glow size={360} color={rgba(tint, t.dark ? 0.045 : 0.06)} style={{ top: -120, left: -110 }} />
+      <Glow size={320} color={rgba(second, t.dark ? 0.04 : 0.055)} style={{ bottom: 40, right: -120 }} />
+      <Glow size={220} color={rgba(tint, t.dark ? 0.035 : 0.05)} style={{ top: '45%', left: -80 }} />
     </>
   );
   if (target && ref) return <BlurTargetView ref={ref} pointerEvents="none" style={StyleSheet.absoluteFill}>{art}</BlurTargetView>;

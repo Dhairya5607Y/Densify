@@ -16,7 +16,7 @@ function panelTheme(s: AppState) {
   const c = th.c;
   return {
     bg: argb(c.bg), sf: argb(c.sf, c.bg), sf2: argb(c.sf2, c.bg), bd: argb(c.bd2, c.bg), tx: argb(c.tx), mu: argb(c.mu, c.bg), ac: argb(c.ac), on: argb(c.on),
-    r: Math.min(th.r, 24), rs: Math.min(th.rs, 14), bw: th.bw > 0 ? Math.max(1, th.bw) : 0, mono: th.mono, upper: th.label !== 'sentence',
+    r: Math.min(th.r, 24), rs: Math.min(th.rs, 14), bw: th.bw > 0 ? Math.max(1, th.bw) : 0, mono: th.mono, upper: th.label !== 'sentence', glass: s.glass, dark: th.dark,
   };
 }
 

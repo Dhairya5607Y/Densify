@@ -51,6 +51,8 @@ data class PanelTheme(
   val bw: Float = 1f,
   val mono: Boolean = false,
   val upper: Boolean = false,
+  val glass: Boolean = false,
+  val dark: Boolean = true,
 )
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
@@ -63,7 +65,7 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
   return PanelTheme(
     bg = c("bg", d.bg), sf = c("sf", d.sf), sf2 = c("sf2", d.sf2), bd = c("bd", d.bd), tx = c("tx", d.tx), mu = c("mu", d.mu), ac = c("ac", d.ac), on = c("on", d.on),
     r = o.optDouble("r", d.r.toDouble()).toFloat(), rs = o.optDouble("rs", d.rs.toDouble()).toFloat(), bw = o.optDouble("bw", d.bw.toDouble()).toFloat(),
-    mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false),
+    mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true),
   )
 }
 
