@@ -19,6 +19,8 @@ const METHODS: Record<string, { title: string; desc: string; icon: IconName; go:
     steps: ['Enable Developer options', 'Open Wireless Debugging', 'Turn Wireless Debugging on', 'Tap Start setup below', 'Choose “Pair device with pairing code”, then type the code into the Densify notification', 'Return to Densify and check the connection'] },
   shizuku: { title: 'Shizuku', desc: 'No pairing code and no Wi-Fi needed. Use it if Wireless Debugging gives errors.', icon: 'bolt', go: 'Allow Shizuku access',
     steps: ['Install Shizuku and start it (with Wireless Debugging on Android 11+, or with root)', 'Tap Allow Shizuku below', 'Approve Densify in the Shizuku prompt', 'Densify connects by itself and keeps working after a restart'] },
+  root: { title: 'Root', desc: 'Connects through su. No pairing code and no Wi-Fi needed.', icon: 'admin-panel-settings', go: 'Connect with root',
+    steps: ['Make sure your phone is rooted (Magisk, KernelSU or similar)', 'Tap Connect with root below', 'Allow Densify in the root manager prompt and tick remember', 'Densify connects by itself and keeps working after a restart'] },
   usb: USB,
   split: { title: 'Split-Screen Method', desc: 'Keep Densify visible while you complete the pairing steps.', icon: 'vertical-split', go: 'Start split-screen setup',
     steps: ['Open Android Settings', 'Go to Developer options', 'Open Wireless Debugging', 'Put Densify in split screen', 'Pair with the code and allow the connection', 'Return to Densify'] },
@@ -34,19 +36,18 @@ const HELP = [
 export function Setup() {
   const t = useTheme(); const nav = useNav(); const toast = useToast(); const ensure = useEnsure(); const adb = useAdb();
   const { state, update } = useStore();
-  const [method, setMethodRaw] = useState(state.mode === 'tcpip' ? 'usb' : state.mode === 'shizuku' ? 'shizuku' : 'notif');
+  const [method, setMethodRaw] = useState(state.mode === 'tcpip' ? 'usb' : state.mode === 'shizuku' ? 'shizuku' : state.mode === 'root' ? 'root' : 'notif');
   const setMethod = (k: string) => {
     setMethodRaw(k);
-    update((x) => ({ ...x, mode: k === 'usb' ? 'tcpip' : k === 'shizuku' ? 'shizuku' : (x.mode === 'tcpip' || x.mode === 'shizuku') ? 'wireless' : x.mode }));
+    update((x) => ({ ...x, mode: k === 'usb' ? 'tcpip' : k === 'shizuku' ? 'shizuku' : k === 'root' ? 'root' : (x.mode === 'tcpip' || x.mode === 'shizuku' || x.mode === 'root') ? 'wireless' : x.mode }));
     api.disconnect();
   };
   // The phone is read from the device, and the best method is picked for it: Shizuku when it is ready, adb tcpip on Android 10 and below, Wireless Debugging otherwise.
   const [dev, setDev] = useState<DeviceInfo | null>(null);
   useEffect(() => {
-    if (api.sdkInt() < 30 && state.mode !== 'tcpip' && state.mode !== 'shizuku') setMethod('usb'); // Android 10 and below has no Wireless Debugging
+    if (api.sdkInt() < 30 && state.mode !== 'tcpip' && state.mode !== 'shizuku' && state.mode !== 'root') setMethod('usb'); // Android 10 and below has no Wireless Debugging
     api.deviceInfo().then((d) => {
       setDev(d);
-      if (d && d.recommended === 'shizuku' && state.mode !== 'shizuku' && !api.isPaired()) setMethod('shizuku');
     });
   }, []);
   const pick = (k: string) => { setMethod(k); if (k !== 'usb') begin(k); };
@@ -61,7 +62,7 @@ export function Setup() {
   }, [adb.state]);
   const [pp, setPp] = useState('');
   const [pc, setPc] = useState('');
-  const recKey = dev ? (dev.recommended === 'shizuku' ? 'shizuku' : dev.recommended === 'tcpip' ? 'usb' : 'notif') : '';
+  const recKey = dev ? (dev.recommended === 'tcpip' ? 'usb' : 'notif') : '';
   const shzText = !dev ? '' : dev.shizuku === 'READY' ? 'Shizuku is running and allowed.' : dev.shizuku === 'NEEDS_PERMISSION' ? 'Shizuku is running. Allow Densify in it.' : dev.shizuku === 'STOPPED' ? 'Shizuku is installed but not running.' : 'Shizuku is not installed.';
   const [open, setOpen] = useState<number | null>(null);
   const [port, setPort] = useState(() => api.storageGet('tcpPort') || '5555');
@@ -98,6 +99,7 @@ export function Setup() {
       check();
       return;
     }
+    if (k === 'root') { check(); return; }
     if (k === 'usb') { toast({ title: 'On your computer run', sub: `adb tcpip ${portOk ? port : '5555'}` }); return; }
     if (k === 'notif') { if (!(await ensure('quickNotif'))) return; api.startPairing(); toast({ title: 'Pairing started', sub: 'Open Wireless Debugging, tap “Pair device with pairing code”, then use the notification.' }); api.openSettings('developer'); }
     else { api.openSettings('developer'); toast({ title: 'Split-screen ready', sub: 'Keep Densify on top while Settings opens below.' }); }
@@ -117,7 +119,7 @@ export function Setup() {
           <T w="600" style={{ fontSize: 14.5 }}>{`${dev.brand} ${dev.model}`}</T>
           <T v="sub" style={{ marginTop: 2 }}>{`${dev.rom}${dev.romVersion ? ` ${dev.romVersion}` : ''} · Android ${dev.release}`}</T>
           <T v="sub" c={t.c.tx2} style={{ marginTop: 8, fontSize: 13.5, lineHeight: 19 }}>
-            {dev.recommended === 'shizuku' ? 'Shizuku is ready, so Densify can connect without any pairing.' : dev.recommended === 'tcpip' ? 'This Android version has no Wireless Debugging. Use Shizuku or “From a computer”.' : 'Wireless Debugging is supported on this phone.'}
+            {dev.recommended === 'tcpip' ? 'This Android version has no Wireless Debugging. Use Shizuku or “From a computer”.' : 'Wireless Debugging is supported on this phone. The Notification method is the easiest way to connect.'}
           </T>
           <T v="sub" style={{ marginTop: 4 }}>{shzText}</T>
           {dev.wirelessSupported && !dev.wifi && method !== 'shizuku' ? <T v="sub" c={t.c.wn} style={{ marginTop: 8 }}>Wi-Fi is off. Wireless Debugging needs Wi-Fi while you pair.</T> : null}
@@ -179,7 +181,7 @@ export function Setup() {
       )}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
         <View style={{ flex: 1 }}><Btn wide v="tonal" label="Developer options" onPress={() => api.openSettings('developer')} /></View>
-        <View style={{ flex: 1 }}><Btn wide v="tonal" label={method === 'usb' ? 'Show command' : method === 'shizuku' ? 'Allow Shizuku' : 'Start again'} onPress={() => { tried.current = true; start(); }} /></View>
+        <View style={{ flex: 1 }}><Btn wide v="tonal" label={method === 'usb' ? 'Show command' : method === 'shizuku' ? 'Allow Shizuku' : method === 'root' ? 'Connect with root' : 'Start again'} onPress={() => { tried.current = true; start(); }} /></View>
       </View>
 
       <Section title="Help" />
