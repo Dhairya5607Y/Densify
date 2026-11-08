@@ -19,6 +19,7 @@ export interface NativeApi {
   isMonitoring(): boolean;
   battery(): { level: number; charging: boolean; tempC: number };
   openSettings(kind: SettingsKind): boolean;
+  launchApp(pkg: string): boolean;
   requestAddTile(): boolean;
   getInstalledApps(): Promise<InstalledApp[]>;
   getAppIcon(pkg: string): Promise<string>;

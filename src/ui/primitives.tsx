@@ -4,6 +4,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme/ThemeContext';
 import { api } from '../native/api';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GlassBlur } from './Backdrop';
 
 export type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 export const Icon = ({ name, size = 22, color }: { name: IconName; size?: number; color?: string }) => {
@@ -52,6 +54,16 @@ export function Surface({ children, style, radius, pad }: { children?: React.Rea
     backgroundColor: t.surface === 'outline' ? 'transparent' : t.c.sf, elevation: t.elev,
     shadowColor: '#0c1620', shadowOpacity: t.elev ? 0.08 : 0, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, padding: pad,
   };
+  if (t.glass) {
+    return (
+      <View style={[base, { shadowOpacity: t.dark ? 0.35 : 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, shadowColor: '#000' }, style]}>
+        <GlassBlur intensity={t.dark ? 45 : 60} />
+        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 1 }} style={StyleSheet.absoluteFill} />
+        <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 14, right: 14, height: 1, backgroundColor: 'rgba(255,255,255,0.55)' }} />
+        {children}
+      </View>
+    );
+  }
   return (
     <View style={[base, style]}>
       {t.surface === 'hud' && (<>

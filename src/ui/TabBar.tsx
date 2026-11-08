@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeContext';
 import { Icon, IconName, T, tap } from './primitives';
 import { useScrollDir } from './scroll';
+import { GlassBlur } from './Backdrop';
 
 export const hexA = (hex: string, a: number) => {
   const h = hex.replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map((x) => x + x).join('') : h, 16);
@@ -31,6 +32,7 @@ export function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 16, right: 16, bottom: Math.max(insets.bottom, 10) + 6 }}>
       <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ borderRadius: radius, borderWidth: 1, borderColor: t.c.bd2, backgroundColor: t.c.sf, padding: 6, flexDirection: 'row', shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 12, overflow: 'hidden' }}>
+        {t.glass ? <GlassBlur intensity={55} /> : null}
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg, opacity: solid.interpolate({ inputRange: [0, 1], outputRange: [0, 0.35] }) }]} />
         {cell > 0 && (
           <Animated.View style={{ position: 'absolute', top: 6, bottom: 6, left: 6, width: cell, borderRadius: radius - 6, backgroundColor: t.c.acs, borderWidth: 1, borderColor: hexA(t.c.ac, 0.35), transform: [{ translateX: slide.interpolate({ inputRange: [0, TABS.length - 1], outputRange: [0, cell * (TABS.length - 1)] }) }] }} />

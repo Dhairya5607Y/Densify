@@ -144,6 +144,7 @@ export function Settings() {
         })}
       </View>
       <T v="sub" style={{ marginHorizontal: 10, marginTop: 10 }}>{THEMES.find((x) => x.id === state.themeId)?.desc}</T>
+      <View style={{ marginTop: 12 }}><Group><Row leadIcon="blur-on" title="Liquid glass" sub="Frosted, translucent surfaces and a glowing backdrop on top of any theme, like Manga + glass or Paper + glass" right={<AppSwitch on={state.glass} onChange={(v) => update((x) => ({ ...x, glass: v }))} />} /></Group></View>
       <Section title="Accent colour" action={state.accent ? 'Reset' : undefined} onAction={() => update((s) => ({ ...s, accent: '' }))} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {ACCENTS.map((c) => (

@@ -9,6 +9,8 @@ export type Theme = {
   switchStyle: 'm3' | 'ios' | 'hud';
   sliderStyle: 'bar' | 'ios' | 'hud';
   swatch: string[];
+  /** Liquid glass overlay: frosted translucent surfaces over a soft glowing backdrop. */
+  glass?: boolean;
 };
 
 const base = { ok: '#4be3a0', wn: '#ffa56b', scrim: 'rgba(0,0,0,.6)' };
@@ -65,3 +67,18 @@ export function withAccent(t: Theme, hex: string): Theme {
   return { ...t, c: { ...t.c, ac: hex, acs, on: lum(hex) > 0.4 ? '#0a0a0a' : '#ffffff' } };
 }
 export const ACCENTS = ['#5cbdff', '#7c9cff', '#b28cff', '#ff7ab8', '#ff6b6b', '#ff9a4d', '#ffd24d', '#8be15c', '#3ef0d0', '#a9b8cc', '#e11d2e', '#0a0a0a'];
+
+/** Liquid glass on top of any theme: keeps its colours and type, swaps the material for frosted translucent glass. */
+export function withGlass(t: Theme): Theme {
+  const d = t.dark;
+  return {
+    ...t, glass: true, surface: t.surface === 'hud' ? 'hud' : 'solid', blur: 30, bw: 1, elev: 0,
+    r: Math.max(t.r, 22), rs: Math.max(t.rs, 14), rb: Math.max(t.rb, 14),
+    c: { ...t.c,
+      sf: d ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.5)',
+      sf2: d ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.68)',
+      bd: d ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.9)',
+      bd2: d ? 'rgba(255,255,255,.32)' : 'rgba(12,22,32,.16)',
+    },
+  };
+}

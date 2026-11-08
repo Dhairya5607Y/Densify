@@ -26,6 +26,8 @@ export type AppState = {
   rec: RecCfg;
   perf: PerfCfg;
   themeId: string;
+  /** Liquid glass overlay on the chosen theme. */
+  glass: boolean;
   accent: string;
   /** Smallest width (dp) to return to after a game. 0 means the phone's own. */
   defaultSw: number;

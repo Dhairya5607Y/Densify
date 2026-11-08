@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { hexA } from '../ui/TabBar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { api, useAdb, useEngine } from '../native/api';
 import { useStore } from '../store/store';
 import type { Profile } from '../store/types';
@@ -26,24 +27,29 @@ const Banner = ({ icon, title, sub, action, onAction }: { icon: 'link' | 'batter
 };
 
 /** Game tile: the game's own icon fills the tile (enlarged and dimmed), with diagonal stripes, a preset badge and the smallest width. */
-function GameTile({ p, preset, live, onPress }: { p: Profile; preset?: string; live: boolean; onPress: () => void }) {
+function GameTile({ p, preset, live, onPress, onAuto }: { p: Profile; preset?: string; live: boolean; onPress: () => void; onAuto: (v: boolean) => void }) {
   const t = useTheme();
   const r = Math.min(t.r, 22);
   return (
-    <Pressable onPress={onPress} style={{ width: '48.5%', height: 160, borderRadius: r, overflow: 'hidden', backgroundColor: '#0b0b0b', borderWidth: live ? 2 : 0, borderColor: t.c.ac, justifyContent: 'flex-end', padding: 14 }}>
-      <View style={{ position: 'absolute', left: -20, right: -20, top: -20, bottom: -20, opacity: 0.55, alignItems: 'center', justifyContent: 'center' }}>
+    <Pressable onPress={onPress} style={{ width: '48.5%', height: 160, borderRadius: r, overflow: 'hidden', backgroundColor: '#161616', borderWidth: live ? 2 : 0, borderColor: t.c.ac, justifyContent: 'flex-end', padding: 14 }}>
+      <View style={{ position: 'absolute', left: -30, right: -30, top: -30, bottom: -30, alignItems: 'center', justifyContent: 'center' }}>
         <AppIcon pkg={p.pkg} name={p.name} size={230} />
       </View>
-      <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }} />
       <View pointerEvents="none" style={{ position: 'absolute', left: -80, top: -80, width: 400, height: 400, transform: [{ rotate: '-35deg' }] }}>
-        {Array.from({ length: 36 }).map((_, i) => <View key={i} style={{ height: 8, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.06)' }} />)}
+        {Array.from({ length: 36 }).map((_, i) => <View key={i} style={{ height: 8, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.05)' }} />)}
       </View>
+      <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.78)']} locations={[0, 0.45, 1]} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }} />
       <View style={{ position: 'absolute', top: 10, right: 10, paddingHorizontal: 9, height: 22, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.92)', justifyContent: 'center' }}>
-        <T c="#0b0b0b" w="700" style={{ fontSize: 10.5, letterSpacing: 0.6 }}>{p.auto ? (preset ?? 'AUTO').toUpperCase() : 'OFF'}</T>
+        <T c="#0b0b0b" w="700" style={{ fontSize: 10.5, letterSpacing: 0.6 }}>{(preset ?? 'CUSTOM').toUpperCase()}</T>
       </View>
       <T c="#fff" w="600" lines={1} style={{ fontSize: 13.5 }}>{p.name}</T>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-        <T c="#fff" style={{ fontSize: 32, fontWeight: '700', letterSpacing: -1 }}>{p.sw}</T><T c="rgba(255,255,255,0.75)" w="600" style={{ marginLeft: 4, fontSize: 11 }}>sw</T>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+          <T c="#fff" style={{ fontSize: 32, fontWeight: '700', letterSpacing: -1 }}>{p.sw}</T><T c="rgba(255,255,255,0.8)" w="600" style={{ marginLeft: 4, fontSize: 11 }}>sw</T>
+        </View>
+        <Pressable onPress={() => onAuto(!p.auto)} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, height: 24, borderRadius: 12, backgroundColor: p.auto ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.18)' }}>
+          <Icon name="bolt" size={13} color={p.auto ? '#0b0b0b' : '#fff'} /><T c={p.auto ? '#0b0b0b' : '#fff'} w="700" style={{ fontSize: 10.5 }}>{p.auto ? 'AUTO' : 'OFF'}</T>
+        </Pressable>
       </View>
     </Pressable>
   );
@@ -113,12 +119,14 @@ export function Games() {
       {connected && !state.defaultSw && <Banner icon="tune" title="Set your default smallest width" sub="Densify returns to this value after every game." action="Detect" onAction={detect} />}
       {lowBat && !dismissed && <Banner icon="battery-alert" title={`Battery at ${bat.level}%`} sub="Games drain faster at this level. Plug in to keep your session going." action="Dismiss" onAction={() => setDismissed(true)} />}
 
-      <Section title="Automation" />
-      <Group><Row leadIcon="bolt" title="Automatic switching" sub={state.automation ? `Watching ${state.profiles.length} game${state.profiles.length === 1 ? '' : 's'}` : 'Paused. Games keep your current smallest width.'} right={<AppSwitch on={state.automation} onChange={toggleAuto} />} /></Group>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginHorizontal: 6 }}>
+        <T v="sub" c={t.c.tx2} style={{ fontSize: 12.5 }}>{state.automation ? `Auto switching on · watching ${state.profiles.filter((p) => p.auto).length} game${state.profiles.filter((p) => p.auto).length === 1 ? '' : 's'}` : 'Auto switching paused'}</T>
+        <View style={{ transform: [{ scale: 0.8 }], marginRight: -6 }}><AppSwitch on={state.automation} onChange={toggleAuto} /></View>
+      </View>
 
       <Section title="Your games" />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {state.profiles.map((p) => <GameTile key={p.pkg} p={p} preset={state.presets.find((x) => x.id === p.presetId)?.name} live={eng.activePkg === p.pkg} onPress={() => nav.push({ name: 'profile', pkg: p.pkg, label: p.name })} />)}
+        {state.profiles.map((p) => <GameTile key={p.pkg} p={p} preset={state.presets.find((x) => x.id === p.presetId)?.name} live={eng.activePkg === p.pkg} onPress={() => nav.push({ name: 'profile', pkg: p.pkg, label: p.name })} onAuto={(v) => update((x) => ({ ...x, profiles: x.profiles.map((y) => (y.pkg === p.pkg ? { ...y, auto: v } : y)) }))} />)}
         <Pressable onPress={() => setSheet(true)} style={{ width: '48.5%', height: 160, borderRadius: Math.min(t.r, 22), borderWidth: 1, borderStyle: 'dashed', borderColor: t.c.bd2, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <Icon name="add" size={28} color={t.c.tx} /><T w="600" style={{ fontSize: 14 }}>Add game</T>
         </Pressable>

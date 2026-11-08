@@ -37,6 +37,7 @@ export const api = {
   adbConnected: () => (Native ? Native.adbConnected() : false),
   isMonitoring: () => (Native ? Native.isMonitoring() : false),
   openSettings: (k: SettingsKind) => (Native ? Native.openSettings(k) : false),
+  launchApp: (pkg: string) => (Native ? Native.launchApp(pkg) : false),
   requestAddTile: () => (Native ? Native.requestAddTile() : false),
   startPairing: () => (Native ? Native.startPairing() : false),
   startMonitoring: () => (Native ? Native.startMonitoring() : false),

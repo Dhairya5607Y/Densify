@@ -81,6 +81,10 @@ class DensifyNativeModule : Module() {
       i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       runCatching { ctx.startActivity(i) }.isSuccess
     }
+    Function("launchApp") { pkg: String ->
+      val i = ctx.packageManager.getLaunchIntentForPackage(pkg)
+      if (i == null) false else { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); runCatching { ctx.startActivity(i) }.isSuccess }
+    }
     Function("requestAddTile") {
       if (Build.VERSION.SDK_INT >= 33) {
         runCatching {

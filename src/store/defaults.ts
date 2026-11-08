@@ -16,6 +16,7 @@ export const DEFAULT_PERF: AppState['perf'] = {
 export const DEFAULT_STATE: AppState = {
   perf: DEFAULT_PERF,
   themeId: 'manga',
+  glass: false,
   accent: '',
   defaultSw: 0, // 0 = the phone's own smallest width; detected on first run
   rec: { res: 'fhd', fps: 60, mbps: 0, codec: 'h264', orient: 'landscape', scope: 'ask', notif: true },

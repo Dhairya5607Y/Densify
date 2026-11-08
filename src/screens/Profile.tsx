@@ -101,7 +101,7 @@ export function Profile({ pkg, label }: { pkg: string; label: string }) {
         <Btn wide v="pri" label={dirty ? 'Save changes' : 'Saved'} disabled={!dirty} onPress={save} />
       </View>
     )}>
-      <Header title={d.name} sub="Game profile" onBack={nav.back} right={existing ? <Btn v="text" label="Delete" onPress={del} /> : undefined} />
+      <Header title={d.name} sub="Game profile" onBack={nav.back} right={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Btn v="pri" icon="play-arrow" label="Play" onPress={() => { if (!api.launchApp(pkg)) toast({ title: "Couldn't open the game", sub: 'Is it still installed?', err: true }); }} />{existing ? <Btn v="text" label="Delete" onPress={del} /> : null}</View>} />
       <Group><Row minH={84} lead={<AppIcon pkg={pkg} name={d.name} size={60} />} title={existing ? 'Profile active' : 'New profile'} sub={`${pkg}`} /></Group>
 
       <Section title="Smallest width" />

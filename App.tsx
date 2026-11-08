@@ -6,9 +6,9 @@ import { api, useAdb } from './src/native/api';
 import { NavProvider, useNav } from './src/nav';
 import { StoreProvider, useStore } from './src/store/store';
 import { ThemeProvider } from './src/theme/ThemeContext';
-import { themeById, withAccent } from './src/theme/themes';
+import { themeById, withAccent, withGlass } from './src/theme/themes';
 import { PermissionProvider } from './src/logic/permissions';
-import { Backdrop } from './src/ui/Backdrop';
+import { Backdrop, GlassProvider } from './src/ui/Backdrop';
 import { ToastProvider } from './src/ui/overlays';
 import { ScrollDirProvider } from './src/ui/scroll';
 import { TabBar } from './src/ui/TabBar';
@@ -47,7 +47,7 @@ function Shell() {
   const r = nav.route;
   return (
     <View style={{ flex: 1 }}>
-      <Backdrop />
+      <Backdrop target />
       {nav.tab === 'games' && <Games />}
       {nav.tab === 'recorder' && <Recorder tab />}
       {nav.tab === 'plugins' && <Plugins tab />}
@@ -77,15 +77,18 @@ function Shell() {
 function Themed() {
   const { state } = useStore();
   const base = themeById(state.themeId);
-  const theme = state.accent ? withAccent(base, state.accent) : base;
+  const accented = state.accent ? withAccent(base, state.accent) : base;
+  const theme = state.glass ? withGlass(accented) : accented;
   return (
     <ThemeProvider theme={theme}>
+      <GlassProvider>
       <StatusBar style={theme.dark ? 'light' : 'dark'} />
       <ScrollDirProvider>
         <ToastProvider>
           <NavProvider><WithPerms /></NavProvider>
         </ToastProvider>
       </ScrollDirProvider>
+      </GlassProvider>
     </ThemeProvider>
   );
 }
