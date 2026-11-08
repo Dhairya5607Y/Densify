@@ -359,7 +359,21 @@ class FloatingPanel(private val ctx: Context) {
     val rb = button("Record", true) { touched(); RecorderService.toggle(ctx); main.postDelayed({ syncRec() }, 900L) }
     val pb = button("Pause", false) { touched(); RecorderService.send(ctx, RecorderService.ACTION_TOGGLE); main.postDelayed({ syncRec() }, 400L) }
     recBtn = rb; pauseBtn = pb
-    rc.addView(row(listOf(rb, pb)))
+    // What to record: the whole screen, or one app (Android 14+ lets you pick the app in its own prompt)
+    val sbtn = button("Screen", false, 12f) { }
+    val abtn = button("One app", false, 12f) { }
+    fun paintScope() {
+      val screen = RecCfg.load().scope == "screen"
+      for ((b, on) in listOf(sbtn to screen, abtn to !screen)) {
+        b.background = if (on) shape(t.ac, t.rs) else shape(t.sf2, t.rs, t.bw, t.bd)
+        b.setTextColor(if (on) t.on else t.tx)
+      }
+    }
+    sbtn.setOnClickListener { touched(); RecCfg.saveScope("screen"); paintScope() }
+    abtn.setOnClickListener { touched(); RecCfg.saveScope("ask"); paintScope() }
+    paintScope()
+    rc.addView(row(listOf(sbtn, abtn)), rowParams(0f))
+    rc.addView(row(listOf(rb, pb)), rowParams(6f))
     body.addView(rc, rowParams())
 
     body.addView(row(listOf(

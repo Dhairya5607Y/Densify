@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { hexA } from '../ui/TabBar';
 import { api, useAdb, useEngine } from '../native/api';
 import { useStore } from '../store/store';
+import type { Profile } from '../store/types';
 import { useTheme } from '../theme/ThemeContext';
 import { useNav } from '../nav';
 import { AnimatedNumber, AppIcon, AppSwitch, Btn, Group, Icon, Row, Ruler, Section, Surface, T } from '../ui/primitives';
@@ -23,6 +24,30 @@ const Banner = ({ icon, title, sub, action, onAction }: { icon: 'link' | 'batter
     </View>
   );
 };
+
+/** Game tile: the game's own icon fills the tile (enlarged and dimmed), with diagonal stripes, a preset badge and the smallest width. */
+function GameTile({ p, preset, live, onPress }: { p: Profile; preset?: string; live: boolean; onPress: () => void }) {
+  const t = useTheme();
+  const r = Math.min(t.r, 22);
+  return (
+    <Pressable onPress={onPress} style={{ width: '48.5%', height: 160, borderRadius: r, overflow: 'hidden', backgroundColor: '#0b0b0b', borderWidth: live ? 2 : 0, borderColor: t.c.ac, justifyContent: 'flex-end', padding: 14 }}>
+      <View style={{ position: 'absolute', left: -20, right: -20, top: -20, bottom: -20, opacity: 0.55, alignItems: 'center', justifyContent: 'center' }}>
+        <AppIcon pkg={p.pkg} name={p.name} size={230} />
+      </View>
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }} />
+      <View pointerEvents="none" style={{ position: 'absolute', left: -80, top: -80, width: 400, height: 400, transform: [{ rotate: '-35deg' }] }}>
+        {Array.from({ length: 36 }).map((_, i) => <View key={i} style={{ height: 8, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.06)' }} />)}
+      </View>
+      <View style={{ position: 'absolute', top: 10, right: 10, paddingHorizontal: 9, height: 22, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.92)', justifyContent: 'center' }}>
+        <T c="#0b0b0b" w="700" style={{ fontSize: 10.5, letterSpacing: 0.6 }}>{p.auto ? (preset ?? 'AUTO').toUpperCase() : 'OFF'}</T>
+      </View>
+      <T c="#fff" w="600" lines={1} style={{ fontSize: 13.5 }}>{p.name}</T>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+        <T c="#fff" style={{ fontSize: 32, fontWeight: '700', letterSpacing: -1 }}>{p.sw}</T><T c="rgba(255,255,255,0.75)" w="600" style={{ marginLeft: 4, fontSize: 11 }}>sw</T>
+      </View>
+    </Pressable>
+  );
+}
 
 export function Games() {
   const { state, update, log } = useStore();
@@ -50,15 +75,15 @@ export function Games() {
   return (
     <Screen tab>
       <Header title="Games" sub="Your profiles and smallest width" right={<Pressable onPress={() => nav.setTab('settings')} hitSlop={10}><Icon name="tune" size={24} color={t.c.tx2} /></Pressable>} />
-      <Surface pad={20} style={{ paddingBottom: 6 }}>
+      <Surface pad={16} style={{ paddingBottom: 4 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <T v="sub" style={{ fontSize: 13.5 }}>Smallest width</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, height: 26, borderRadius: 13, backgroundColor: t.c.sf2 }}>
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: chip[1] }} /><T v="sub" c={chip[1]} w="600" style={{ fontSize: 12 }}>{chip[0]}</T>
           </View>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 18 }}>
-          {shown > 0 ? <AnimatedNumber value={shown} style={{ fontSize: 84, fontWeight: '500', letterSpacing: -4, color: t.c.tx, fontFamily: t.mono ? 'monospace' : undefined }} /> : <T v="num">—</T>}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
+          {shown > 0 ? <AnimatedNumber value={shown} style={{ fontSize: 44, fontWeight: '500', letterSpacing: -2, color: t.c.tx, fontFamily: t.mono ? 'monospace' : undefined }} /> : <T v="num" style={{ fontSize: 44 }}>—</T>}
           <T v="sub" style={{ marginLeft: 8, fontSize: 15 }}>dp</T>
         </View>
         <Ruler value={shown || 480} def={state.defaultSw} />
@@ -87,28 +112,11 @@ export function Games() {
       <Section title="Automation" />
       <Group><Row leadIcon="bolt" title="Automatic switching" sub={state.automation ? `Watching ${state.profiles.length} game${state.profiles.length === 1 ? '' : 's'}` : 'Paused. Games keep your current smallest width.'} right={<AppSwitch on={state.automation} onChange={toggleAuto} />} /></Group>
 
-      <Section title="Profiles" />
+      <Section title="Your games" />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {state.profiles.map((p) => {
-          const preset = state.presets.find((x) => x.id === p.presetId)?.name;
-          const live = eng.activePkg === p.pkg;
-          return (
-            <Pressable key={p.pkg} onPress={() => nav.push({ name: 'profile', pkg: p.pkg, label: p.name })} style={{ width: '48.5%', padding: 14, borderRadius: Math.min(t.r, 22), borderWidth: 1, borderColor: live ? t.c.ac : t.c.bd, backgroundColor: t.c.sf }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <AppIcon pkg={p.pkg} name={p.name} size={40} />
-                <View style={{ paddingHorizontal: 8, height: 22, borderRadius: 11, backgroundColor: p.auto ? t.c.acs : t.c.sf2, justifyContent: 'center' }}>
-                  <T v="sub" c={p.auto ? t.c.ac : t.c.mu} w="600" style={{ fontSize: 10.5 }}>{p.auto ? (preset ?? 'AUTO').toUpperCase() : 'OFF'}</T>
-                </View>
-              </View>
-              <T w="600" lines={1} style={{ marginTop: 12, fontSize: 14.5 }}>{p.name}</T>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
-                <T style={{ fontSize: 30, fontWeight: '500', letterSpacing: -1 }}>{p.sw}</T><T v="sub" style={{ marginLeft: 4, fontSize: 12 }}>sw</T>
-              </View>
-            </Pressable>
-          );
-        })}
-        <Pressable onPress={() => setSheet(true)} style={{ width: '48.5%', minHeight: 132, borderRadius: Math.min(t.r, 22), borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.c.bd2, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <Icon name="add" size={26} color={t.c.ac} /><T c={t.c.ac} w="600" style={{ fontSize: 14 }}>Add game</T>
+        {state.profiles.map((p) => <GameTile key={p.pkg} p={p} preset={state.presets.find((x) => x.id === p.presetId)?.name} live={eng.activePkg === p.pkg} onPress={() => nav.push({ name: 'profile', pkg: p.pkg, label: p.name })} />)}
+        <Pressable onPress={() => setSheet(true)} style={{ width: '48.5%', height: 160, borderRadius: Math.min(t.r, 22), borderWidth: 1, borderStyle: 'dashed', borderColor: t.c.bd2, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Icon name="add" size={28} color={t.c.tx} /><T w="600" style={{ fontSize: 14 }}>Add game</T>
         </Pressable>
       </View>
 

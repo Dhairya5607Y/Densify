@@ -51,6 +51,11 @@ data class RecCfg(
 ) {
   companion object {
     fun load(): RecCfg = parse(Hub.prefs.getString("rec", "") ?: "")
+    /** Changes only the scope ("screen" or "ask") and keeps every other recorder setting as the app saved it. */
+    fun saveScope(scope: String) {
+      val o = runCatching { JSONObject(Hub.prefs.getString("rec", "") ?: "") }.getOrDefault(JSONObject())
+      Hub.prefs.edit().putString("rec", o.put("scope", scope).toString()).apply()
+    }
     fun parse(raw: String): RecCfg = runCatching {
       val o = JSONObject(raw)
       RecCfg(
