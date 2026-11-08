@@ -6,12 +6,12 @@ import { useStore } from '../store/store';
 import type { Profile } from '../store/types';
 import { useTheme } from '../theme/ThemeContext';
 import { useNav } from '../nav';
-import { AnimatedNumber, AppIcon, AppSwitch, Btn, Group, Icon, Row, Ruler, Section, Surface, T } from '../ui/primitives';
+import { AnimatedNumber, AppIcon, AppSwitch, Btn, Group, Icon, Row, Section, Surface, T } from '../ui/primitives';
 import { useToast } from '../ui/overlays';
 import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
 import { ago, useBattery } from '../logic/hooks';
-import { AddGameSheet, Header } from './common';
+import { AddGameSheet } from './common';
 import { StretchCard } from './StretchCard';
 
 const Banner = ({ icon, title, sub, action, onAction }: { icon: 'link' | 'battery-alert' | 'tune'; title: string; sub: string; action?: string; onAction?: () => void }) => {
@@ -74,22 +74,27 @@ export function Games() {
 
   return (
     <Screen tab>
-      <Header title="Games" sub="Your profiles and smallest width" right={<Pressable onPress={() => nav.setTab('settings')} hitSlop={10}><Icon name="tune" size={24} color={t.c.tx2} /></Pressable>} />
-      <Surface pad={16} style={{ paddingBottom: 4 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <T v="sub" style={{ fontSize: 13.5 }}>Smallest width</T>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, height: 26, borderRadius: 13, backgroundColor: t.c.sf2 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: chip[1] }} /><T v="sub" c={chip[1]} w="600" style={{ fontSize: 12 }}>{chip[0]}</T>
+      <Surface pad={12}>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flex: 1, justifyContent: 'space-between' }}>
+            <T v="sub" style={{ fontSize: 11, letterSpacing: 1 }}>SMALLEST WIDTH</T>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              {shown > 0 ? <AnimatedNumber value={shown} style={{ fontSize: 40, fontWeight: '500', letterSpacing: -1.5, color: t.c.tx, fontFamily: t.mono ? 'monospace' : undefined }} /> : <T style={{ fontSize: 40 }}>—</T>}
+              <T v="sub" style={{ marginLeft: 4, fontSize: 13 }}>dp</T>
+            </View>
+            <Pressable onPress={restore} disabled={!connected || (state.defaultSw > 0 && shown === state.defaultSw)} hitSlop={8}>
+              <T v="sub" c={!connected || (state.defaultSw > 0 && shown === state.defaultSw) ? t.c.mu : t.c.ac} w="600" style={{ fontSize: 12.5 }}>{activeName ? `${activeName} · Restore` : state.defaultSw ? `Restore ${state.defaultSw}` : 'Restore default'}</T>
+            </Pressable>
           </View>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
-          {shown > 0 ? <AnimatedNumber value={shown} style={{ fontSize: 44, fontWeight: '500', letterSpacing: -2, color: t.c.tx, fontFamily: t.mono ? 'monospace' : undefined }} /> : <T v="num" style={{ fontSize: 44 }}>—</T>}
-          <T v="sub" style={{ marginLeft: 8, fontSize: 15 }}>dp</T>
-        </View>
-        <Ruler value={shown || 480} def={state.defaultSw} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginHorizontal: -8 }}>
-          <T v="sub" style={{ marginLeft: 8, fontSize: 13.5 }}>{activeName ? `${activeName} profile` : state.defaultSw ? `Default ${state.defaultSw}` : 'Phone default'}</T>
-          <Btn v="text" label="Restore default" disabled={!connected || (state.defaultSw > 0 && shown === state.defaultSw)} onPress={restore} />
+          <View style={{ flex: 1.25 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, height: 22, borderRadius: 11, backgroundColor: t.c.sf2 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: chip[1] }} /><T v="sub" c={chip[1]} w="600" style={{ fontSize: 11 }}>{chip[0]}</T>
+              </View>
+              <Pressable onPress={() => nav.setTab('settings')} hitSlop={10}><Icon name="tune" size={20} color={t.c.tx2} /></Pressable>
+            </View>
+            <StretchCard compact />
+          </View>
         </View>
       </Surface>
 
@@ -101,7 +106,6 @@ export function Games() {
         </View>
       ) : null}
 
-      <StretchCard />
 
       {!connected && (api.isPaired() && state.mode !== 'root' && state.mode !== 'shizuku'
         ? <Banner icon="link" title="Reconnecting to Android…" sub="Densify is already set up and reconnects by itself when Wi-Fi is on." action="Retry" onAction={() => api.connect().catch((e: Error) => toast({ title: "Couldn't connect yet", sub: e.message, err: true }))} />

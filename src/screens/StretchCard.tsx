@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { api, useAdb } from '../native/api';
 import { useStore } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
@@ -9,7 +9,7 @@ import { useEnsure } from '../logic/permissions';
 import { formatSize, parseSize, quickSizes } from '../logic/size';
 
 /** Stretch resolution, front and centre: type width*height, apply it now, reset it any time. */
-export function StretchCard() {
+export function StretchCard({ compact }: { compact?: boolean }) {
   const t = useTheme(); const toast = useToast(); const ensure = useEnsure(); const adb = useAdb();
   const { log } = useStore();
   const connected = adb.state === 'connected';
@@ -39,6 +39,22 @@ export function StretchCard() {
     setBusy(false);
   };
   const onText = (s: string) => { setText(s.replace(/[^0-9*xX×,:\s]/g, '').slice(0, 12)); setErr(''); const r = parseSize(s); if (r.err === undefined) api.saveStretch(r.w, r.h); };
+
+  if (compact) {
+    const sm = (label: string, onPress: () => void, pri: boolean) => (
+      <Pressable disabled={!connected || busy} onPress={onPress} style={{ flex: 1, height: 32, borderRadius: Math.min(t.rb, 10), alignItems: 'center', justifyContent: 'center', backgroundColor: !connected || busy ? t.c.sf2 : pri ? t.c.ac : t.c.acs }}>
+        <Text style={{ color: !connected || busy ? t.c.mu : pri ? t.c.on : t.c.ac, fontWeight: '600', fontSize: 12.5 }}>{label}</Text>
+      </Pressable>
+    );
+    return (
+      <View>
+        <View style={{ height: 34, borderRadius: Math.min(t.rs, 10), borderWidth: 1.2, borderColor: err ? t.c.wn : t.c.bd2, justifyContent: 'center', paddingHorizontal: 10 }}>
+          <TextInput value={text} onChangeText={onText} placeholder="Stretch 2160*1080" placeholderTextColor={t.c.mu} keyboardType="numbers-and-punctuation" autoCorrect={false} onSubmitEditing={apply} style={{ color: t.c.tx, fontSize: 14, paddingVertical: 0, fontFamily: t.mono ? 'monospace' : undefined }} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>{sm('Stretch', apply, true)}{sm('Reset', reset, false)}</View>
+      </View>
+    );
+  }
 
   return (
     <Surface pad={16} style={{ marginTop: 12 }}>

@@ -10,8 +10,8 @@ export const hexA = (hex: string, a: number) => {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
-export type Tab = 'games' | 'stats' | 'plugins' | 'settings';
-const TABS: { k: Tab; label: string; icon: IconName }[] = [{ k: 'games', label: 'Home', icon: 'home' }, { k: 'stats', label: 'Stats', icon: 'insights' }, { k: 'plugins', label: 'Plugins', icon: 'extension' }, { k: 'settings', label: 'Settings', icon: 'tune' }];
+export type Tab = 'games' | 'stats' | 'recorder' | 'plugins' | 'settings';
+const TABS: { k: Tab; label: string; icon: IconName }[] = [{ k: 'games', label: 'Home', icon: 'home' }, { k: 'stats', label: 'Stats', icon: 'insights' }, { k: 'recorder', label: 'Record', icon: 'videocam' }, { k: 'plugins', label: 'Plugins', icon: 'extension' }, { k: 'settings', label: 'Settings', icon: 'tune' }];
 
 /** Floating pill bar with a sliding highlight. */
 export function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {

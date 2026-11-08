@@ -17,7 +17,7 @@ const RATES = [0, 8, 16, 25, 40, 60, 80];
 
 const clock = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-export function Recorder() {
+export function Recorder({ tab }: { tab?: boolean }) {
   const { state, update } = useStore();
   const t = useTheme(); const nav = useNav(); const toast = useToast(); const ensure = useEnsure();
   const rec = useRecorder();
@@ -46,8 +46,8 @@ export function Recorder() {
   const last = () => { if (!api.recOpenLast()) toast({ title: 'No recording yet', sub: 'Your first recording will show up here.' }); };
 
   return (
-    <Screen>
-      <Header title="Screen recorder" sub="Light, hardware encoded" onBack={nav.back} />
+    <Screen tab={tab}>
+      <Header title="Screen recorder" sub="Light, hardware encoded" onBack={tab ? undefined : nav.back} />
       <Surface pad={18}>
         <View style={{ alignItems: 'center' }}>
           <T v="num" style={{ fontSize: 52 }}>{clock(rec.elapsedMs)}</T>

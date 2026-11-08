@@ -115,7 +115,6 @@ export function Settings() {
 
       <Section title="Tools" />
       <Group>
-        <Row leadIcon="videocam" title="Screen recorder" sub="Light recorder, up to 4K 60 fps. Start, pause and stop from the notification." onPress={() => nav.push({ name: 'recorder' })} right={<Icon name="chevron-right" />} />
         <Row leadIcon="developer-mode" title="Developer" sub="Tweaks, power menu, settings editor, external API" onPress={() => nav.push({ name: 'developer' })} right={<Icon name="chevron-right" />} />
         <Row leadIcon="terminal" title="Terminal, logs and backup" sub="Run shell commands, read activity, troubleshoot" onPress={() => nav.push({ name: 'tools' })} right={<Icon name="chevron-right" />} />
       </Group>

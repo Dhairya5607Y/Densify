@@ -49,6 +49,7 @@ function Shell() {
     <View style={{ flex: 1 }}>
       <Backdrop />
       {nav.tab === 'games' && <Games />}
+      {nav.tab === 'recorder' && <Recorder tab />}
       {nav.tab === 'plugins' && <Plugins tab />}
       {nav.tab === 'stats' && <Stats />}
       {nav.tab === 'settings' && <Settings />}
@@ -66,7 +67,6 @@ function Shell() {
             {r.name === 'developer' && <Developer />}
             {r.name === 'settingsEditor' && <SettingsEditor />}
             {r.name === 'apps' && <Apps />}
-            {r.name === 'recorder' && <Recorder />}
           </View>
         </Slide>
       )}
