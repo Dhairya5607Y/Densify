@@ -24,18 +24,6 @@ export function GlassBlur({ intensity = 40 }: { intensity?: number }) {
   return <BlurView pointerEvents="none" intensity={intensity} tint={t.dark ? 'dark' : 'light'} blurTarget={ref ?? undefined} blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />;
 }
 
-/** A soft round glow made of stacked translucent discs, since React Native has no radial gradient. */
-function Glow({ size, color, style }: { size: number; color: string; style: object }) {
-  return (
-    <View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size }, style]}>
-      {Array.from({ length: 9 }).map((_, i) => {
-        const s = size * (1 - i * 0.1);
-        return <View key={i} style={{ position: 'absolute', left: (size - s) / 2, top: (size - s) / 2, width: s, height: s, borderRadius: s / 2, backgroundColor: color }} />;
-      })}
-    </View>
-  );
-}
-
 /** Theme background behind every screen. With liquid glass it becomes a soft glowing scene that the glass blurs. */
 export function Backdrop({ target }: { target?: boolean }) {
   const t = useTheme(); const ref = useContext(GlassCtx);
@@ -43,13 +31,13 @@ export function Backdrop({ target }: { target?: boolean }) {
   const ink = t.id === 'manga'; // Manga stays black and white: neutral grey light instead of a coloured glow
   const tint = ink ? '#8a8a86' : t.c.ac;
   const second = t.dark ? '#7c5cff' : t.id === 'paper' ? '#8cc8ff' : ink ? '#c4c4c0' : '#ff9ac8';
+  const a1 = t.dark ? 0.15 : 0.14; const a2 = t.dark ? 0.11 : 0.12;
+  // Two long, smooth diagonal washes (no discs, no hard rings): soft colour from the top-left and a faint second tone at the bottom-right.
   const art = (
     <>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg }]} />
-      <LinearGradient pointerEvents="none" colors={[rgba(tint, t.dark ? 0.22 : 0.24), 'rgba(0,0,0,0)', rgba(second, t.dark ? 0.16 : 0.2)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <Glow size={360} color={rgba(tint, t.dark ? 0.045 : 0.06)} style={{ top: -120, left: -110 }} />
-      <Glow size={320} color={rgba(second, t.dark ? 0.04 : 0.055)} style={{ bottom: 40, right: -120 }} />
-      <Glow size={220} color={rgba(tint, t.dark ? 0.035 : 0.05)} style={{ top: '45%', left: -80 }} />
+      <LinearGradient pointerEvents="none" colors={[rgba(tint, a1), rgba(tint, a1 * 0.7), rgba(tint, a1 * 0.4), rgba(tint, a1 * 0.15), rgba(tint, 0)]} locations={[0, 0.2, 0.45, 0.7, 1]} start={{ x: 0, y: 0 }} end={{ x: 0.85, y: 0.75 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={[rgba(second, 0), rgba(second, a2 * 0.25), rgba(second, a2 * 0.6), rgba(second, a2)]} locations={[0.35, 0.6, 0.82, 1]} start={{ x: 0.1, y: 0.15 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
     </>
   );
   if (target && ref) return <BlurTargetView ref={ref} pointerEvents="none" style={StyleSheet.absoluteFill}>{art}</BlurTargetView>;

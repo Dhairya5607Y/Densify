@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, PanResponder, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { api, useAdb } from './src/native/api';
@@ -11,7 +11,7 @@ import { PermissionProvider } from './src/logic/permissions';
 import { Backdrop, GlassProvider } from './src/ui/Backdrop';
 import { ToastProvider } from './src/ui/overlays';
 import { ScrollDirProvider } from './src/ui/scroll';
-import { TabBar } from './src/ui/TabBar';
+import { TabBar, TAB_ORDER } from './src/ui/TabBar';
 import { Games } from './src/screens/Games';
 import { Presets } from './src/screens/Presets';
 import { Profile } from './src/screens/Profile';
@@ -45,8 +45,21 @@ function Shell() {
     api.readSw().then((d) => { if (d.physSw > 0) update((s) => (s.defaultSw > 0 ? s : { ...s, defaultSw: d.physSw })); }).catch(() => {});
   }, [adb.state]);
   const r = nav.route;
+  // Swipe sideways to move between the bottom tabs (only on a tab, not while a sub-screen is open)
+  const live = useRef({ tab: nav.tab, open: !!r, go: nav.setTab });
+  live.current = { tab: nav.tab, open: !!r, go: nav.setTab };
+  const swipe = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => !live.current.open && Math.abs(g.dx) > 26 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+    onPanResponderRelease: (_, g) => {
+      if (live.current.open) return;
+      if (Math.abs(g.dx) < 60 && Math.abs(g.vx) < 0.6) return;
+      const i = TAB_ORDER.indexOf(live.current.tab);
+      const n = g.dx < 0 ? i + 1 : i - 1;
+      if (n >= 0 && n < TAB_ORDER.length) live.current.go(TAB_ORDER[n]);
+    },
+  })).current;
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }} {...swipe.panHandlers}>
       <Backdrop target />
       {nav.tab === 'games' && <Games />}
       {nav.tab === 'recorder' && <Recorder tab />}

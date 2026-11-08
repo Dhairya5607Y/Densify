@@ -245,18 +245,65 @@ object Perf {
 
   // ---------- FPS from SurfaceFlinger ----------
 
+  // Three sources, because phones differ (stock Pixel, OneUI, ColorOS/OxygenOS, MIUI/HyperOS, FuntouchOS...). The first one that reports frames wins.
+  //  1. SurfaceFlinger --latency on the game's own layer (accurate, works on most phones)
+  //  2. HWUI frame stats from gfxinfo (apps drawn by Android's UI renderer)
+  //  3. SurfaceFlinger's frame counter, sampled twice (whole-screen presents per second, works when layer names are hidden)
+  private var lastSfCount = -1L
+  private var lastSfAt = 0L
+  @Volatile var fpsSource = ""
+    private set
+
   private suspend fun readFps(pkg: String): Int {
     var name = if (layerPkg == pkg) layerName else null
     if (name == null) {
       val now = SystemClock.elapsedRealtime()
-      if (layerPkg == pkg && now < layerRetryAt) return -1
-      name = findLayer(pkg)
-      layerPkg = pkg; layerName = name; layerMisses = 0
-      if (name == null) { layerRetryAt = now + 10_000L; return -1 }
+      if (layerPkg != pkg || now >= layerRetryAt) {
+        name = findLayer(pkg)
+        layerPkg = pkg; layerName = name; layerMisses = 0
+        if (name == null) layerRetryAt = now + 10_000L
+      }
     }
-    val fps = latencyFps(name)
-    if (fps <= 0) { layerMisses++; if (layerMisses >= 4) { layerName = null; layerRetryAt = 0L } } else layerMisses = 0
-    return fps
+    if (name != null) {
+      val fps = latencyFps(name)
+      if (fps > 0) { layerMisses = 0; fpsSource = "SurfaceFlinger layer"; return fps }
+      layerMisses++; if (layerMisses >= 4) { layerName = null; layerRetryAt = 0L }
+    }
+    val g = gfxinfoFps(pkg)
+    if (g > 0) { fpsSource = "HWUI frame stats"; return g }
+    val c = sfCounterFps()
+    if (c > 0) { fpsSource = "Screen frame counter"; return c }
+    return -1
+  }
+
+  private suspend fun gfxinfoFps(pkg: String): Int {
+    val out = Hub.adb.exec("dumpsys gfxinfo '" + pkg.replace("'", "") + "' framestats").getOrNull() ?: return -1
+    val lines = out.lineSequence().toList()
+    val h = lines.indexOfFirst { it.startsWith("Flags,") }
+    if (h < 0) return -1
+    val idx = lines[h].split(",").indexOf("FrameCompleted")
+    if (idx < 0) return -1
+    val stamps = ArrayList<Long>()
+    for (i in h + 1 until lines.size) {
+      val l = lines[i]
+      if (l.startsWith("---")) break
+      val c = l.split(",")
+      if (c.size <= idx || c[0].trim() != "0") continue
+      val t = c[idx].trim().toLongOrNull() ?: continue
+      if (t > 0L && t < Long.MAX_VALUE / 2) stamps.add(t)
+    }
+    return fpsOf(stamps)
+  }
+
+  private suspend fun sfCounterFps(): Int {
+    val out = Hub.adb.exec("service call SurfaceFlinger 1013 2>/dev/null").getOrNull() ?: return -1
+    val m = Regex("Parcel\\(([0-9a-fA-F]{8})").find(out) ?: return -1
+    val n = m.groupValues[1].toLongOrNull(16) ?: return -1
+    val now = SystemClock.elapsedRealtime()
+    val prevN = lastSfCount; val prevAt = lastSfAt
+    lastSfCount = n; lastSfAt = now
+    if (prevN < 0 || now - prevAt < 400L || now - prevAt > 5_000L || n < prevN) return -1
+    return min(240.0, (n - prevN) * 1000.0 / (now - prevAt)).roundToInt()
   }
 
   private suspend fun latencyFps(layer: String): Int {
@@ -291,6 +338,11 @@ object Perf {
       if (t <= 0L || t >= Long.MAX_VALUE / 2) continue
       stamps.add(t)
     }
+    return fpsOf(stamps)
+  }
+
+  /** Frames per second over the newest second of frame timestamps (nanoseconds). 0 when the surface has gone quiet. */
+  private fun fpsOf(stamps: List<Long>): Int {
     if (stamps.size < 2) return 0
     val last = stamps.max()
     if (System.nanoTime() - last > 3_000_000_000L) return 0
