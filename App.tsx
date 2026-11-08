@@ -48,24 +48,50 @@ function Shell() {
   // Swipe sideways to move between the bottom tabs (only on a tab, not while a sub-screen is open)
   const live = useRef({ tab: nav.tab, open: !!r, go: nav.setTab });
   live.current = { tab: nav.tab, open: !!r, go: nav.setTab };
+  const shift = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(1)).current;
+  const prevIdx = useRef(TAB_ORDER.indexOf(nav.tab));
+  // Every tab change (swipe or tap) slides the new page in from the side it is on
+  useEffect(() => {
+    const i = TAB_ORDER.indexOf(nav.tab); const d = i - prevIdx.current; prevIdx.current = i;
+    if (d === 0) return;
+    shift.setValue(d > 0 ? 56 : -56); fade.setValue(0.2);
+    Animated.parallel([
+      Animated.spring(shift, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 240, mass: 0.8 }),
+      Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
+    ]).start();
+  }, [nav.tab]);
   const swipe = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => !live.current.open && Math.abs(g.dx) > 26 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
-    onPanResponderRelease: (_, g) => {
-      if (live.current.open) return;
-      if (Math.abs(g.dx) < 60 && Math.abs(g.vx) < 0.6) return;
+    onPanResponderMove: (_, g) => {
       const i = TAB_ORDER.indexOf(live.current.tab);
       const n = g.dx < 0 ? i + 1 : i - 1;
-      if (n >= 0 && n < TAB_ORDER.length) live.current.go(TAB_ORDER[n]);
+      const ok = n >= 0 && n < TAB_ORDER.length;
+      shift.setValue(Math.max(-90, Math.min(90, g.dx * (ok ? 0.4 : 0.12)))); // the page follows the finger, and resists at the ends
+    },
+    onPanResponderTerminate: () => { Animated.spring(shift, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 220 }).start(); },
+    onPanResponderRelease: (_, g) => {
+      const i = TAB_ORDER.indexOf(live.current.tab);
+      const n = g.dx < 0 ? i + 1 : i - 1;
+      const far = Math.abs(g.dx) >= 60 || Math.abs(g.vx) >= 0.6;
+      if (far && n >= 0 && n < TAB_ORDER.length) {
+        Animated.parallel([
+          Animated.timing(shift, { toValue: g.dx < 0 ? -80 : 80, duration: 90, useNativeDriver: true }),
+          Animated.timing(fade, { toValue: 0, duration: 90, useNativeDriver: true }),
+        ]).start(() => live.current.go(TAB_ORDER[n]));
+      } else Animated.spring(shift, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 220 }).start();
     },
   })).current;
   return (
     <View style={{ flex: 1 }} {...swipe.panHandlers}>
       <Backdrop target />
-      {nav.tab === 'games' && <Games />}
-      {nav.tab === 'recorder' && <Recorder tab />}
-      {nav.tab === 'plugins' && <Plugins tab />}
-      {nav.tab === 'stats' && <Stats />}
-      {nav.tab === 'settings' && <Settings />}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade, transform: [{ translateX: shift }] }]}>
+        {nav.tab === 'games' && <Games />}
+        {nav.tab === 'recorder' && <Recorder tab />}
+        {nav.tab === 'plugins' && <Plugins tab />}
+        {nav.tab === 'stats' && <Stats />}
+        {nav.tab === 'settings' && <Settings />}
+      </Animated.View>
       <TabBar tab={nav.tab} onTab={nav.setTab} />
       {r && (
         <Slide key={r.name + (r.name === 'profile' ? r.pkg : r.name === 'webui' ? r.id : '')}>
