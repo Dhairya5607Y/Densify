@@ -25,6 +25,8 @@ export const DEFAULT_STATE: AppState = {
   lowBattery: true,
   lowBatteryPercent: 50,
   floating: 'off',
+  floatStyle: 'basic',
+  floatOpacity: 90,
   autoReconnect: true,
   bridge: false,
   mode: 'wireless',

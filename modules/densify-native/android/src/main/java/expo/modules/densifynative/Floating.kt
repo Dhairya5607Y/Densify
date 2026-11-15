@@ -77,11 +77,16 @@ class FloatingPanel(private val ctx: Context) {
   private var root: LinearLayout? = null
   private var lp: WindowManager.LayoutParams? = null
   private var bubble: ImageView? = null
+  private var column: LinearLayout? = null
+  private var pill: TextView? = null
+  private var collapsedX = -1
   private var panel: LinearLayout? = null
   private var valueLabel: TextView? = null
   private var recBtn: TextView? = null
   private var pauseBtn: TextView? = null
   private val stats = HashMap<String, TextView>()
+  private fun island() = t.style == "island"
+  private fun islandAlpha() = (t.opacity / 100f).coerceIn(0.2f, 1f)
   private var scale = 1f
   private var expanded = false
 
@@ -99,7 +104,7 @@ class FloatingPanel(private val ctx: Context) {
 
   private val ticker = object : Runnable {
     override fun run() {
-      if (!visible || !expanded) return
+      if (!visible || (!expanded && !island())) return
       updateStats()
       syncValue()
       syncRec()
@@ -116,6 +121,7 @@ class FloatingPanel(private val ctx: Context) {
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
+      if (island()) { Perf.start(); Perf.acquire("panel"); main.removeCallbacks(ticker); main.postDelayed(ticker, 500L); r.alpha = islandAlpha() }
       if (startOpen) setExpanded(true)
       syncValue()
     }
@@ -135,7 +141,7 @@ class FloatingPanel(private val ctx: Context) {
   }
 
   private fun clearRefs() {
-    root = null; panel = null; bubble = null; valueLabel = null; quickA = null; quickB = null; sizeIn = null; sizeStatus = null; recBtn = null; pauseBtn = null
+    root = null; column = null; pill = null; panel = null; bubble = null; valueLabel = null; quickA = null; quickB = null; sizeIn = null; sizeStatus = null; recBtn = null; pauseBtn = null
     stats.clear()
   }
 
@@ -159,6 +165,7 @@ class FloatingPanel(private val ctx: Context) {
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
+      if (island()) { r.alpha = islandAlpha(); main.removeCallbacks(ticker); main.postDelayed(ticker, 500L) }
       if (wasOpen) setExpanded(true)
       syncValue()
     }
@@ -278,23 +285,37 @@ class FloatingPanel(private val ctx: Context) {
       if (!r.glass) r else if (r.dark) r.copy(sf = 0x26FFFFFF, sf2 = 0x3DFFFFFF, bd = 0x66FFFFFF)
       else r.copy(sf = 0xA6FFFFFF.toInt(), sf2 = 0xD9FFFFFF.toInt(), bd = 0x33000000)
     }
-    val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.START }
+    val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = if (island()) Gravity.CENTER_HORIZONTAL else Gravity.START }
+    column = col
 
-    // The bubble is the Densify logo. Everything else lives in the panel it opens.
-    val b = ImageView(ctx).apply {
-      setImageResource(ctx.resources.getIdentifier("densify_logo", "drawable", ctx.packageName))
-      scaleType = ImageView.ScaleType.CENTER_CROP
-      background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(t.bg); setStroke(px(2f).coerceAtLeast(1), t.ac) }
-      val ring = px(2f).coerceAtLeast(1)
-      setPadding(ring, ring, ring, ring)
-      outlineProvider = ViewOutlineProvider.BACKGROUND
-      clipToOutline = true
-      layoutParams = LinearLayout.LayoutParams(px(52f), px(52f))
-      isClickable = true
+    if (island()) {
+      // Dynamic island: a slim pill at the top-centre of the screen with live numbers. Tap it to open the panel.
+      val pl = label("", 12f, t.tx, true, caps = false).apply {
+        background = shape(withAlpha(t.bg, 0xF2), 999f, t.bw.coerceAtLeast(1f), t.bd)
+        setPadding(px(16f), px(7f), px(16f), px(7f))
+        minWidth = px(132f)
+        isClickable = true
+        setOnClickListener { touched(); toggle() }
+      }
+      pill = pl
+      col.addView(pl, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+    } else {
+      // The bubble is the Densify logo. Everything else lives in the panel it opens.
+      val b = ImageView(ctx).apply {
+        setImageResource(ctx.resources.getIdentifier("densify_logo", "drawable", ctx.packageName))
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(t.bg); setStroke(px(2f).coerceAtLeast(1), t.ac) }
+        val ring = px(2f).coerceAtLeast(1)
+        setPadding(ring, ring, ring, ring)
+        outlineProvider = ViewOutlineProvider.BACKGROUND
+        clipToOutline = true
+        layoutParams = LinearLayout.LayoutParams(px(52f), px(52f))
+        isClickable = true
+      }
+      bubble = b
+      attachDrag(b, true)
+      col.addView(b)
     }
-    bubble = b
-    attachDrag(b, true)
-    col.addView(b)
 
     val pn = LinearLayout(ctx).apply {
       orientation = LinearLayout.VERTICAL
@@ -303,7 +324,7 @@ class FloatingPanel(private val ctx: Context) {
       elevation = px(10f).toFloat()
       visibility = View.GONE
     }
-    pn.layoutParams = LinearLayout.LayoutParams(px(288f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f) }
+    pn.layoutParams = LinearLayout.LayoutParams(px(288f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f); if (island()) gravity = Gravity.CENTER_HORIZONTAL }
     panel = pn
 
     // Header stays put while the rest scrolls: drag handle, app name and Hide
@@ -403,10 +424,15 @@ class FloatingPanel(private val ctx: Context) {
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
       PixelFormat.TRANSLUCENT,
     ).apply {
-      gravity = Gravity.TOP or Gravity.START
       softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
-      x = saved.getInt("floatX", px(8f)).coerceIn(0, (m.widthPixels - px(52f)).coerceAtLeast(0))
-      y = saved.getInt("floatY", px(160f)).coerceIn(0, (m.heightPixels - px(52f)).coerceAtLeast(0))
+      if (island()) {
+        gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        x = 0; y = px(6f)
+      } else {
+        gravity = Gravity.TOP or Gravity.START
+        x = saved.getInt("floatX", px(8f)).coerceIn(0, (m.widthPixels - px(52f)).coerceAtLeast(0))
+        y = saved.getInt("floatY", px(160f)).coerceIn(0, (m.heightPixels - px(52f)).coerceAtLeast(0))
+      }
     }
   }
 
@@ -474,6 +500,11 @@ class FloatingPanel(private val ctx: Context) {
     }
     stats["ram"]?.text = if (s.ramPct >= 0) "${s.ramPct}%" else "–"
     stats["ping"]?.text = if (s.pingMs >= 0) s.pingMs.toString() else "–"
+    pill?.text = listOfNotNull(
+      if (s.fps >= 0) "${s.fps} FPS" else null,
+      if (s.tempC > 0f) "${s.tempC.roundToInt()}°" else null,
+      if (s.pingMs >= 0) "${s.pingMs} ms" else null,
+    ).ifEmpty { listOf("Densify · ${currentSw()}") }.joinToString("  ·  ")
   }
 
   /** Reads the screen size once (when the panel opens or after a size change), not on a timer. */
@@ -590,6 +621,15 @@ class FloatingPanel(private val ctx: Context) {
   private fun setExpanded(on: Boolean) {
     expanded = on
     panel?.visibility = if (on) View.VISIBLE else View.GONE
+    if (island()) {
+      root?.alpha = if (on) max(islandAlpha(), 0.7f) else islandAlpha()
+    } else lp?.let { p ->
+      // Near the right edge the 288dp panel would run off the screen: slide the window left (bubble stays under the finger, aligned to the right) and put it back when closed.
+      val w = realMetrics(ctx).widthPixels; val pw = px(288f)
+      if (on && p.x + pw > w) { collapsedX = p.x; p.x = (w - pw).coerceAtLeast(0); column?.gravity = Gravity.END }
+      else if (!on && collapsedX >= 0) { p.x = collapsedX; collapsedX = -1; column?.gravity = Gravity.START }
+      root?.let { r -> runCatching { wm.updateViewLayout(r, p) } }
+    }
     // Liquid glass: blur what is behind the open panel (Android 12+ phones that support window blur)
     if (t.glass && Build.VERSION.SDK_INT >= 31) {
       lp?.let { p ->
@@ -614,8 +654,7 @@ class FloatingPanel(private val ctx: Context) {
       main.removeCallbacks(ticker)
       main.postDelayed(ticker, 1_000L)
     } else {
-      Perf.release("panel")
-      main.removeCallbacks(ticker)
+      if (island()) { main.removeCallbacks(ticker); main.postDelayed(ticker, 1_000L) } else { Perf.release("panel"); main.removeCallbacks(ticker) }
       endTyping()
     }
     val p = lp
@@ -646,7 +685,13 @@ class FloatingPanel(private val ctx: Context) {
         }
         MotionEvent.ACTION_UP -> {
           touched()
-          if (moved) Hub.prefs.edit().putInt("floatX", p.x).putInt("floatY", p.y).apply() else if (toggleOnTap) toggle()
+          if (moved) {
+            // Snap to the nearest side so the bubble never sits half-way across the screen
+            val m = realMetrics(ctx); val edge = px(6f); val size = px(52f)
+            p.x = if (p.x + size / 2 < m.widthPixels / 2) edge else (m.widthPixels - size - edge).coerceAtLeast(0)
+            root?.let { r -> runCatching { wm.updateViewLayout(r, p) } }
+            Hub.prefs.edit().putInt("floatX", p.x).putInt("floatY", p.y).apply()
+          } else if (toggleOnTap) toggle()
           true
         }
         else -> false

@@ -36,6 +36,10 @@ export type AppState = {
   lowBattery: boolean;
   lowBatteryPercent: number;
   floating: 'off' | 'gaming' | 'always';
+  /** Floating panel look: a draggable bubble, or a pill at the top of the screen like a dynamic island. */
+  floatStyle: 'basic' | 'island';
+  /** Opacity of the dynamic island, 30 to 100 percent. */
+  floatOpacity: number;
   autoReconnect: boolean;
   /** Keep the adb link on a local port so switching keeps working with Wi-Fi off. */
   bridge: boolean;

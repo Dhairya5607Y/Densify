@@ -6,7 +6,7 @@ import { useStore } from '../store/store';
 import { accentClashes, ACCENTS, THEMES } from '../theme/themes';
 import { useTheme } from '../theme/ThemeContext';
 import { useNav } from '../nav';
-import { AppSwitch, Btn, Chip, Group, Icon, Row, Section, T } from '../ui/primitives';
+import { AppSwitch, Btn, Chip, Group, Icon, Row, Section, Slider, T } from '../ui/primitives';
 import { useToast } from '../ui/overlays';
 import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
@@ -91,6 +91,9 @@ export function Settings() {
       <Group>
         <Row leadIcon="layers" title="Show over games" sub="A draggable, scrollable panel in your game's theme: smallest width, stretch, optimize and recording" below={
           (['off', 'gaming', 'always'] as const).map((m) => <Chip key={m} h={36} label={m === 'off' ? 'Off' : m === 'gaming' ? 'In games' : 'Always'} on={state.floating === m} onPress={() => setFloating(m)} />)} />
+        <Row leadIcon="smartphone" title="Panel style" sub={state.floatStyle === 'island' ? 'Dynamic island: a slim pill at the top of the screen with live FPS, temperature and ping. Tap it to open the panel.' : 'Basic: a draggable logo bubble that snaps to the side of the screen'} below={
+          ([['basic', 'Basic'], ['island', 'Dynamic island']] as const).map(([k, l]) => <Chip key={k} h={36} label={l} on={state.floatStyle === k} onPress={() => update((x) => ({ ...x, floatStyle: k }))} />)} />
+        {state.floatStyle === 'island' && <Row leadIcon="opacity" title={`Island opacity ${state.floatOpacity}%`} sub="Lower it to see more of the game behind the pill" below={<View style={{ flex: 1 }}><Slider value={state.floatOpacity} min={30} max={100} onChange={(v) => update((x) => ({ ...x, floatOpacity: Math.round(v / 5) * 5 }))} /></View>} />}
         <Row leadIcon="visibility" title="Preview the panel" sub="Shows it for 15 seconds so you can place it" onPress={preview} />
       </Group>
 
