@@ -29,6 +29,7 @@ export const DEFAULT_STATE: AppState = {
   floatOpacity: 90,
   floatSize: 100,
   floatPos: 'top',
+  floatName: false,
   autoReconnect: true,
   bridge: false,
   mode: 'wireless',

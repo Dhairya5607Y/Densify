@@ -81,7 +81,7 @@ Two styles, chosen in Settings:
 | Style | Behaviour |
 | --- | --- |
 | **Basic** | A draggable logo bubble. It snaps to the nearest side of the screen, and when it is near an edge the panel slides in so it never runs off the screen. |
-| **Dynamic island** | A slim black pill that says DENSIFY, like a phone's dynamic island. Tap it to open the full panel. Put it at the **top** (camera side) or on the **right** (the top of the phone when held sideways), or **drag it anywhere**. Its **size** and **opacity** are adjustable. |
+| **Dynamic island** | A slim, pure black pill like a phone's dynamic island. It sits right over your camera cut-out and wraps it. Tap it to open the full panel. You can write **DENSIFY** in it in light blue (off by default). Put it at the **top** (camera side) or on the **right** (the top of the phone when held sideways), or **drag it anywhere**. Its **size** and **opacity** are adjustable. |
 
 ### Themes and liquid glass
 - Seven themes: Paper (default, white with light blue), Matte, Graphite, Manga (strictly black and white), Material You, HUD and Ember

@@ -130,7 +130,7 @@ class FloatingPanel(private val ctx: Context) {
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
-      if (island()) r.alpha = islandAlpha()
+      if (island()) { r.alpha = islandAlpha(); r.post { alignToCutout() } }
       if (startOpen) setExpanded(true)
       syncValue()
     }
@@ -174,7 +174,7 @@ class FloatingPanel(private val ctx: Context) {
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
-      if (island()) r.alpha = islandAlpha()
+      if (island()) { r.alpha = islandAlpha(); r.post { alignToCutout() } }
       if (wasOpen) setExpanded(true)
       syncValue()
     }
@@ -299,9 +299,9 @@ class FloatingPanel(private val ctx: Context) {
     column = col
 
     if (island()) {
-      // Dynamic island: a slim black pill that says DENSIFY. Tap it to open the panel; drag it anywhere to move it.
+      // Dynamic island: a slim black pill (optionally with DENSIFY in light blue). Tap it to open the panel; drag it anywhere to move it.
       val sz = t.islandSize / 100f
-      val pl = label("DENSIFY", 11.5f * sz, WHITE, true, caps = false).apply {
+      val pl = label(if (t.islandName) "DENSIFY" else "", 11.5f * sz, 0xFF8CC4F5.toInt(), true, caps = false).apply {
         background = shape(BLACK, 999f)
         letterSpacing = 0.22f
         setPadding(px(20f * sz), px(8f * sz), px(20f * sz), px(8f * sz))
@@ -434,10 +434,13 @@ class FloatingPanel(private val ctx: Context) {
       WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.WRAP_CONTENT,
       type,
-      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
       PixelFormat.TRANSLUCENT,
     ).apply {
       softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+      // Let the island draw into the camera cut-out area instead of being pushed below it
+      if (Build.VERSION.SDK_INT >= 30) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+      else if (Build.VERSION.SDK_INT >= 28) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
       if (island()) {
         val spot = freeSpot()
         islandFree = spot != null
@@ -751,6 +754,23 @@ class FloatingPanel(private val ctx: Context) {
         else -> false
       }
     }
+  }
+
+  /** Puts the island exactly over the phone's camera cut-out (punch hole or notch) when it has one, sized to wrap it like a real dynamic island. */
+  private fun alignToCutout() {
+    if (!island() || islandFree || Build.VERSION.SDK_INT < 28) return
+    val r = root ?: return; val p = lp ?: return; val pl = pill ?: return
+    val cut = r.rootWindowInsets?.displayCutout ?: return
+    val m = realMetrics(ctx)
+    val right = t.islandPos == "right"
+    val rc = (if (right) cut.boundingRects.firstOrNull { it.right >= m.widthPixels - 2 } else cut.boundingRects.firstOrNull { it.top <= 2 }) ?: return
+    pl.minWidth = max(pl.minWidth, rc.width() + px(28f))
+    pl.minHeight = max(pl.minHeight, rc.height() + px(10f))
+    val h = max(pl.height, pl.minHeight)
+    if (right) { p.x = 0; p.y = rc.centerY() - m.heightPixels / 2 }
+    else { p.x = rc.centerX() - m.widthPixels / 2; p.y = (rc.centerY() - h / 2).coerceAtLeast(0) }
+    pl.requestLayout()
+    runCatching { wm.updateViewLayout(r, p) }
   }
 
   private fun toggle() {

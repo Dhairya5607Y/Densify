@@ -43,6 +43,8 @@ export type AppState = {
   /** Dynamic island size in percent and position: 'top' (camera side) or 'right' (landscape side). Dragging it overrides this. */
   floatSize: number;
   floatPos: 'top' | 'right';
+  /** Write DENSIFY (light blue) inside the island. Off by default. */
+  floatName: boolean;
   autoReconnect: boolean;
   /** Keep the adb link on a local port so switching keeps working with Wi-Fi off. */
   bridge: boolean;
