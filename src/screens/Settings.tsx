@@ -91,9 +91,16 @@ export function Settings() {
       <Group>
         <Row leadIcon="layers" title="Show over games" sub="A draggable, scrollable panel in your game's theme: smallest width, stretch, optimize and recording" below={
           (['off', 'gaming', 'always'] as const).map((m) => <Chip key={m} h={36} label={m === 'off' ? 'Off' : m === 'gaming' ? 'In games' : 'Always'} on={state.floating === m} onPress={() => setFloating(m)} />)} />
-        <Row leadIcon="smartphone" title="Panel style" sub={state.floatStyle === 'island' ? 'Dynamic island: a slim pill at the top of the screen with live FPS, temperature and ping. Tap it to open the panel.' : 'Basic: a draggable logo bubble that snaps to the side of the screen'} below={
+        <Row leadIcon="smartphone" title="Panel style" sub={state.floatStyle === 'island' ? 'Dynamic island: a slim pill at the top of the screen. Tap it to open the panel.' : 'Basic: a draggable logo bubble that snaps to the side of the screen'} below={
           ([['basic', 'Basic'], ['island', 'Dynamic island']] as const).map(([k, l]) => <Chip key={k} h={36} label={l} on={state.floatStyle === k} onPress={() => update((x) => ({ ...x, floatStyle: k }))} />)} />
-        {state.floatStyle === 'island' && <Row leadIcon="opacity" title={`Island opacity ${state.floatOpacity}%`} sub="Lower it to see more of the game behind the pill" below={<View style={{ flex: 1 }}><Slider value={state.floatOpacity} min={30} max={100} onChange={(v) => update((x) => ({ ...x, floatOpacity: Math.round(v / 5) * 5 }))} /></View>} />}
+        {state.floatStyle === 'island' && (<>
+          <Row leadIcon="opacity" title={`Opacity ${state.floatOpacity}%`} sub="Lower it to see more of the game behind the island" below={<View style={{ flex: 1 }}><Slider value={state.floatOpacity} min={30} max={100} onChange={(v) => update((x) => ({ ...x, floatOpacity: Math.round(v / 5) * 5 }))} /></View>} />
+          <Row leadIcon="open-in-full" title={`Size ${state.floatSize}%`} sub="Make the island smaller or larger" below={<View style={{ flex: 1 }}><Slider value={state.floatSize} min={70} max={150} onChange={(v) => update((x) => ({ ...x, floatSize: Math.round(v / 5) * 5 }))} /></View>} />
+          <Row leadIcon="palette" title="Colour" sub="Text switches between black and white to stay readable" below={['#000000', '#ffffff', '#0b78e0', '#16a34a', '#dc2626', '#7c3aed', '#f59e0b'].map((c) => (
+            <Pressable key={c} onPress={() => update((x) => ({ ...x, floatColor: c }))} style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: c, borderWidth: state.floatColor === c ? 3 : 1, borderColor: state.floatColor === c ? t.c.ac : t.c.bd2 }} />))} />
+          <Row leadIcon="title" title="Write DENSIFY" sub="Show the name inside the island" right={<AppSwitch on={state.floatName} onChange={(v) => update((x) => ({ ...x, floatName: v }))} />} />
+          <Row leadIcon="speed" title="Show FPS" sub="Show the live frame rate inside the island" right={<AppSwitch on={state.floatFps} onChange={(v) => update((x) => ({ ...x, floatFps: v }))} />} />
+        </>)}
         <Row leadIcon="visibility" title="Preview the panel" sub="Shows it for 15 seconds so you can place it" onPress={preview} />
       </Group>
 

@@ -290,10 +290,14 @@ class FloatingPanel(private val ctx: Context) {
 
     if (island()) {
       // Dynamic island: a slim pill at the top-centre of the screen with live numbers. Tap it to open the panel.
-      val pl = label("", 12f, t.tx, true, caps = false).apply {
-        background = shape(withAlpha(t.bg, 0xF2), 999f, t.bw.coerceAtLeast(1f), t.bd)
-        setPadding(px(16f), px(7f), px(16f), px(7f))
-        minWidth = px(132f)
+      val sz = t.islandSize / 100f
+      val ink = if (lum(t.islandColor or BLACK) > 0.45) BLACK else WHITE
+      val pl = label("", 12f * sz, ink, true, caps = false).apply {
+        background = shape(t.islandColor or BLACK, 999f)
+        letterSpacing = 0.06f
+        setPadding(px(18f * sz), px(8f * sz), px(18f * sz), px(8f * sz))
+        minWidth = px(124f * sz)
+        minHeight = px(34f * sz)
         isClickable = true
         setOnClickListener { touched(); toggle() }
       }
@@ -501,10 +505,9 @@ class FloatingPanel(private val ctx: Context) {
     stats["ram"]?.text = if (s.ramPct >= 0) "${s.ramPct}%" else "–"
     stats["ping"]?.text = if (s.pingMs >= 0) s.pingMs.toString() else "–"
     pill?.text = listOfNotNull(
-      if (s.fps >= 0) "${s.fps} FPS" else null,
-      if (s.tempC > 0f) "${s.tempC.roundToInt()}°" else null,
-      if (s.pingMs >= 0) "${s.pingMs} ms" else null,
-    ).ifEmpty { listOf("Densify · ${currentSw()}") }.joinToString("  ·  ")
+      if (t.islandName) "DENSIFY" else null,
+      if (t.islandFps) (if (s.fps >= 0) "${s.fps} FPS" else "– FPS") else null,
+    ).joinToString("  ·  ")
   }
 
   /** Reads the screen size once (when the panel opens or after a size change), not on a timer. */

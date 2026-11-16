@@ -80,7 +80,7 @@ Two styles, chosen in Settings:
 | Style | Behaviour |
 | --- | --- |
 | **Basic** | A draggable logo bubble. It snaps to the nearest side of the screen, and when it is near an edge the panel slides in so it never runs off the screen. |
-| **Dynamic island** | A slim pill at the top-centre of the screen showing live FPS, temperature and ping. Tap it to open the full panel. Its **opacity is adjustable** from 30 to 100 percent, so it can stay out of the way of the game. |
+| **Dynamic island** | A slim pill at the top-centre of the screen, like a phone's dynamic island. Tap it to open the full panel. You can change its **size**, **colour** and **opacity**, show the live FPS inside it, and optionally write **DENSIFY** in it. |
 
 ### Themes and liquid glass
 - Seven themes: Paper (default, white with light blue), Matte, Graphite, Manga (strictly black and white), Material You, HUD and Ember
