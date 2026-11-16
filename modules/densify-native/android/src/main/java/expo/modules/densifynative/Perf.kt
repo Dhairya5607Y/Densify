@@ -269,11 +269,36 @@ object Perf {
       if (fps > 0) { layerMisses = 0; fpsSource = "SurfaceFlinger layer"; return fps }
       layerMisses++; if (layerMisses >= 4) { layerName = null; layerRetryAt = 0L }
     }
+    val ts = timestatsFps(pkg)
+    if (ts > 0) { fpsSource = "SurfaceFlinger timestats"; return ts }
     val g = gfxinfoFps(pkg)
     if (g > 0) { fpsSource = "HWUI frame stats"; return g }
     val c = sfCounterFps()
     if (c > 0) { fpsSource = "Screen frame counter"; return c }
     return -1
+  }
+
+  private var tsEnabled = false
+  private val tsPrev = HashMap<String, Pair<Long, Long>>()
+
+  /** SurfaceFlinger's own per-layer frame statistics (Android 10+): how many frames each layer has presented, sampled over time. */
+  private suspend fun timestatsFps(pkg: String): Int {
+    if (!tsEnabled) { Hub.adb.exec("dumpsys SurfaceFlinger --timestats -enable"); tsEnabled = true }
+    val out = Hub.adb.exec("dumpsys SurfaceFlinger --timestats -dump").getOrNull() ?: return -1
+    if (!out.contains("layerName")) { tsEnabled = false; return -1 }
+    val now = SystemClock.elapsedRealtime()
+    var best = -1
+    for (block in out.split("layerName =").drop(1)) {
+      val name = block.lineSequence().first().trim()
+      if (!name.contains(pkg)) continue
+      val frames = Regex("totalFrames\\s*=\\s*(\\d+)").find(block)?.groupValues?.get(1)?.toLongOrNull() ?: continue
+      val prev = tsPrev.put(name, frames to now)
+      if (prev == null) continue
+      val dt = now - prev.second
+      if (dt < 400L || dt > 6_000L || frames < prev.first) continue
+      best = max(best, min(240.0, (frames - prev.first) * 1000.0 / dt).roundToInt())
+    }
+    return if (best > 0) best else -1
   }
 
   private suspend fun gfxinfoFps(pkg: String): Int {

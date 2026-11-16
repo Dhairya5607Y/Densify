@@ -62,11 +62,12 @@ Everywhere in Densify the number is the **smallest width** in dp, the same numbe
 - Per-session averages: average FPS, 1% low, min and max, CPU, average and peak temperature, RAM, and ping with its low and high
 - Sampling only runs while something is showing it, so the monitor costs nothing the rest of the time
 
-**FPS works across phones and ROMs.** Phones differ (stock Android, One UI, ColorOS and OxygenOS, MIUI and HyperOS, Funtouch and more), so Densify tries three sources and uses the first that reports frames:
+**FPS works across phones and ROMs.** Phones differ (stock Android, One UI, ColorOS and OxygenOS, MIUI and HyperOS, Funtouch and more), so Densify tries four sources and uses the first that reports frames:
 
 1. SurfaceFlinger frame timing on the game's own layer (the most accurate)
-2. HWUI frame stats from `gfxinfo`, for apps drawn by Android's UI renderer
-3. SurfaceFlinger's frame counter, sampled over time, when a phone hides layer names
+2. SurfaceFlinger `--timestats`, the compositor's own per-layer frame count (Android 10+), sampled over time
+3. HWUI frame stats from `gfxinfo`, for apps drawn by Android's UI renderer
+4. SurfaceFlinger's whole-screen frame counter, when a phone hides layer names
 
 A number a phone refuses to give shows as a dash instead of a guess.
 
@@ -80,7 +81,7 @@ Two styles, chosen in Settings:
 | Style | Behaviour |
 | --- | --- |
 | **Basic** | A draggable logo bubble. It snaps to the nearest side of the screen, and when it is near an edge the panel slides in so it never runs off the screen. |
-| **Dynamic island** | A slim pill at the top-centre of the screen, like a phone's dynamic island. Tap it to open the full panel. You can change its **size**, **colour** and **opacity**, show the live FPS inside it, and optionally write **DENSIFY** in it. |
+| **Dynamic island** | A slim black pill that says DENSIFY, like a phone's dynamic island. Tap it to open the full panel. Put it at the **top** (camera side) or on the **right** (the top of the phone when held sideways), or **drag it anywhere**. Its **size** and **opacity** are adjustable. |
 
 ### Themes and liquid glass
 - Seven themes: Paper (default, white with light blue), Matte, Graphite, Manga (strictly black and white), Material You, HUD and Ember
@@ -141,7 +142,7 @@ flowchart LR
     E --> H[wm density / wm size<br/>settings / cmd]
     F --> H
     G --> H
-    B --> I[Perf sampler<br/>3 FPS sources]
+    B --> I[Perf sampler<br/>4 FPS sources]
     I --> J[Stats tab, overlay,<br/>floating panel]
 ```
 

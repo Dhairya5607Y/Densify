@@ -40,11 +40,9 @@ export type AppState = {
   floatStyle: 'basic' | 'island';
   /** Opacity of the dynamic island, 30 to 100 percent. */
   floatOpacity: number;
-  /** Dynamic island look: size in percent, colour, and whether it shows the name and the FPS. */
+  /** Dynamic island size in percent and position: 'top' (camera side) or 'right' (landscape side). Dragging it overrides this. */
   floatSize: number;
-  floatColor: string;
-  floatName: boolean;
-  floatFps: boolean;
+  floatPos: 'top' | 'right';
   autoReconnect: boolean;
   /** Keep the adb link on a local port so switching keeps working with Wi-Fi off. */
   bridge: boolean;

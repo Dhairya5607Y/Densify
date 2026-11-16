@@ -56,11 +56,9 @@ data class PanelTheme(
   /** Floating panel style: "basic" (a draggable bubble) or "island" (a pill at the top of the screen), and the island's opacity in percent. */
   val style: String = "basic",
   val opacity: Int = 90,
-  /** Dynamic island look: pill colour (ARGB), size in percent, and whether it shows the name "DENSIFY" and the FPS. */
-  val islandColor: Int = 0xFF000000.toInt(),
+  /** Dynamic island: size in percent and where it sits: "top" (camera side), "right" (landscape side). Dragging it anywhere overrides this until a position is picked again. */
   val islandSize: Int = 100,
-  val islandName: Boolean = false,
-  val islandFps: Boolean = true,
+  val islandPos: String = "top",
 )
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
@@ -74,7 +72,7 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
     bg = c("bg", d.bg), sf = c("sf", d.sf), sf2 = c("sf2", d.sf2), bd = c("bd", d.bd), tx = c("tx", d.tx), mu = c("mu", d.mu), ac = c("ac", d.ac), on = c("on", d.on),
     r = o.optDouble("r", d.r.toDouble()).toFloat(), rs = o.optDouble("rs", d.rs.toDouble()).toFloat(), bw = o.optDouble("bw", d.bw.toDouble()).toFloat(),
     mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true), style = o.optString("style", "basic"), opacity = o.optInt("opacity", 90).coerceIn(20, 100),
-    islandColor = c("islandColor", d.islandColor), islandSize = o.optInt("islandSize", 100).coerceIn(60, 160), islandName = o.optBoolean("islandName", false), islandFps = o.optBoolean("islandFps", true),
+    islandSize = o.optInt("islandSize", 100).coerceIn(60, 160), islandPos = o.optString("islandPos", "top"),
   )
 }
 

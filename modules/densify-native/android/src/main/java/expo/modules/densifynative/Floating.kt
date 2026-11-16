@@ -86,6 +86,15 @@ class FloatingPanel(private val ctx: Context) {
   private var pauseBtn: TextView? = null
   private val stats = HashMap<String, TextView>()
   private fun island() = t.style == "island"
+  /** Where the user last dragged the island, as "x,y,pos". Only valid while the chosen position in the app is still the one it was dragged from. */
+  private fun freeSpot(): Pair<Int, Int>? {
+    val p = (Hub.prefs.getString("islandFree", "") ?: "").split(",")
+    if (p.size != 3 || p[2] != t.islandPos) return null
+    val x = p[0].toIntOrNull() ?: return null; val y = p[1].toIntOrNull() ?: return null
+    return x to y
+  }
+  private var islandFree = false
+  private fun colGravity(): Int = if (!island() || islandFree) Gravity.START else if (t.islandPos == "right") Gravity.END else Gravity.CENTER_HORIZONTAL
   private fun islandAlpha() = (t.opacity / 100f).coerceIn(0.2f, 1f)
   private var scale = 1f
   private var expanded = false
@@ -104,7 +113,7 @@ class FloatingPanel(private val ctx: Context) {
 
   private val ticker = object : Runnable {
     override fun run() {
-      if (!visible || (!expanded && !island())) return
+      if (!visible || !expanded) return
       updateStats()
       syncValue()
       syncRec()
@@ -121,7 +130,7 @@ class FloatingPanel(private val ctx: Context) {
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
-      if (island()) { Perf.start(); Perf.acquire("panel"); main.removeCallbacks(ticker); main.postDelayed(ticker, 500L); r.alpha = islandAlpha() }
+      if (island()) r.alpha = islandAlpha()
       if (startOpen) setExpanded(true)
       syncValue()
     }
@@ -165,7 +174,7 @@ class FloatingPanel(private val ctx: Context) {
       val r = root ?: return@post
       val p = lp ?: return@post
       runCatching { wm.addView(r, p); visible = true }
-      if (island()) { r.alpha = islandAlpha(); main.removeCallbacks(ticker); main.postDelayed(ticker, 500L) }
+      if (island()) r.alpha = islandAlpha()
       if (wasOpen) setExpanded(true)
       syncValue()
     }
@@ -285,21 +294,21 @@ class FloatingPanel(private val ctx: Context) {
       if (!r.glass) r else if (r.dark) r.copy(sf = 0x26FFFFFF, sf2 = 0x3DFFFFFF, bd = 0x66FFFFFF)
       else r.copy(sf = 0xA6FFFFFF.toInt(), sf2 = 0xD9FFFFFF.toInt(), bd = 0x33000000)
     }
-    val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = if (island()) Gravity.CENTER_HORIZONTAL else Gravity.START }
+    islandFree = island() && freeSpot() != null
+    val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = colGravity() }
     column = col
 
     if (island()) {
-      // Dynamic island: a slim pill at the top-centre of the screen with live numbers. Tap it to open the panel.
+      // Dynamic island: a slim black pill that says DENSIFY. Tap it to open the panel; drag it anywhere to move it.
       val sz = t.islandSize / 100f
-      val ink = if (lum(t.islandColor or BLACK) > 0.45) BLACK else WHITE
-      val pl = label("", 12f * sz, ink, true, caps = false).apply {
-        background = shape(t.islandColor or BLACK, 999f)
-        letterSpacing = 0.06f
-        setPadding(px(18f * sz), px(8f * sz), px(18f * sz), px(8f * sz))
+      val pl = label("DENSIFY", 11.5f * sz, WHITE, true, caps = false).apply {
+        background = shape(BLACK, 999f)
+        letterSpacing = 0.22f
+        setPadding(px(20f * sz), px(8f * sz), px(20f * sz), px(8f * sz))
         minWidth = px(124f * sz)
         minHeight = px(34f * sz)
         isClickable = true
-        setOnClickListener { touched(); toggle() }
+        attachIslandDrag(this)
       }
       pill = pl
       col.addView(pl, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -328,7 +337,7 @@ class FloatingPanel(private val ctx: Context) {
       elevation = px(10f).toFloat()
       visibility = View.GONE
     }
-    pn.layoutParams = LinearLayout.LayoutParams(px(288f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f); if (island()) gravity = Gravity.CENTER_HORIZONTAL }
+    pn.layoutParams = LinearLayout.LayoutParams(px(288f), LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(8f); if (island()) gravity = colGravity() }
     panel = pn
 
     // Header stays put while the rest scrolls: drag handle, app name and Hide
@@ -430,8 +439,18 @@ class FloatingPanel(private val ctx: Context) {
     ).apply {
       softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
       if (island()) {
-        gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        x = 0; y = px(6f)
+        val spot = freeSpot()
+        islandFree = spot != null
+        if (spot != null) {
+          gravity = Gravity.TOP or Gravity.START
+          x = spot.first.coerceIn(0, (m.widthPixels - px(60f)).coerceAtLeast(0)); y = spot.second.coerceIn(0, (m.heightPixels / 2).coerceAtLeast(0))
+        } else if (t.islandPos == "right") {
+          gravity = Gravity.END or Gravity.CENTER_VERTICAL
+          x = px(4f); y = 0
+        } else {
+          gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+          x = 0; y = px(6f)
+        }
       } else {
         gravity = Gravity.TOP or Gravity.START
         x = saved.getInt("floatX", px(8f)).coerceIn(0, (m.widthPixels - px(52f)).coerceAtLeast(0))
@@ -504,10 +523,6 @@ class FloatingPanel(private val ctx: Context) {
     }
     stats["ram"]?.text = if (s.ramPct >= 0) "${s.ramPct}%" else "–"
     stats["ping"]?.text = if (s.pingMs >= 0) s.pingMs.toString() else "–"
-    pill?.text = listOfNotNull(
-      if (t.islandName) "DENSIFY" else null,
-      if (t.islandFps) (if (s.fps >= 0) "${s.fps} FPS" else "– FPS") else null,
-    ).joinToString("  ·  ")
   }
 
   /** Reads the screen size once (when the panel opens or after a size change), not on a timer. */
@@ -624,9 +639,8 @@ class FloatingPanel(private val ctx: Context) {
   private fun setExpanded(on: Boolean) {
     expanded = on
     panel?.visibility = if (on) View.VISIBLE else View.GONE
-    if (island()) {
-      root?.alpha = if (on) max(islandAlpha(), 0.7f) else islandAlpha()
-    } else lp?.let { p ->
+    if (island()) root?.alpha = if (on) max(islandAlpha(), 0.7f) else islandAlpha()
+    if (!island() || islandFree) lp?.let { p ->
       // Near the right edge the 288dp panel would run off the screen: slide the window left (bubble stays under the finger, aligned to the right) and put it back when closed.
       val w = realMetrics(ctx).widthPixels; val pw = px(288f)
       if (on && p.x + pw > w) { collapsedX = p.x; p.x = (w - pw).coerceAtLeast(0); column?.gravity = Gravity.END }
@@ -657,7 +671,8 @@ class FloatingPanel(private val ctx: Context) {
       main.removeCallbacks(ticker)
       main.postDelayed(ticker, 1_000L)
     } else {
-      if (island()) { main.removeCallbacks(ticker); main.postDelayed(ticker, 1_000L) } else { Perf.release("panel"); main.removeCallbacks(ticker) }
+      Perf.release("panel")
+      main.removeCallbacks(ticker)
       endTyping()
     }
     val p = lp
@@ -695,6 +710,42 @@ class FloatingPanel(private val ctx: Context) {
             root?.let { r -> runCatching { wm.updateViewLayout(r, p) } }
             Hub.prefs.edit().putInt("floatX", p.x).putInt("floatY", p.y).apply()
           } else if (toggleOnTap) toggle()
+          true
+        }
+        else -> false
+      }
+    }
+  }
+
+  /** The island opens on tap and moves where you drag it. The spot is remembered until a position is picked again in the app. */
+  private fun attachIslandDrag(v: View) {
+    val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+    var startX = 0; var startY = 0; var touchX = 0f; var touchY = 0f; var moved = false
+    v.setOnTouchListener { _, e ->
+      val p = lp ?: return@setOnTouchListener false
+      when (e.action) {
+        MotionEvent.ACTION_DOWN -> { touchX = e.rawX; touchY = e.rawY; moved = false; true }
+        MotionEvent.ACTION_MOVE -> {
+          if (!moved && (kotlin.math.abs(e.rawX - touchX) > slop || kotlin.math.abs(e.rawY - touchY) > slop)) {
+            moved = true
+            // Switch from a centred or edge-hugging window to an absolute one, starting exactly where it is now
+            val loc = IntArray(2); root?.getLocationOnScreen(loc)
+            p.gravity = Gravity.TOP or Gravity.START; p.x = loc[0]; p.y = loc[1]
+            startX = p.x; startY = p.y
+            islandFree = true; column?.gravity = Gravity.START
+            (panel?.layoutParams as? LinearLayout.LayoutParams)?.gravity = Gravity.START
+          }
+          if (moved) {
+            val m = realMetrics(ctx)
+            p.x = (startX + (e.rawX - touchX).toInt()).coerceIn(0, (m.widthPixels - px(60f)).coerceAtLeast(0))
+            p.y = (startY + (e.rawY - touchY).toInt()).coerceIn(0, (m.heightPixels / 2).coerceAtLeast(0))
+            root?.let { r -> runCatching { wm.updateViewLayout(r, p) } }
+          }
+          true
+        }
+        MotionEvent.ACTION_UP -> {
+          touched()
+          if (moved) Hub.prefs.edit().putString("islandFree", "${p.x},${p.y},${t.islandPos}").apply() else toggle()
           true
         }
         else -> false
