@@ -34,6 +34,7 @@ export const DEFAULT_STATE: AppState = {
   floatY: 2,
   floatDx: 0,
   floatDy: 0,
+  floatMove: false,
   islandV2: true,
   floatName: false,
   autoReconnect: true,

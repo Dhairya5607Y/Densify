@@ -67,6 +67,8 @@ data class PanelTheme(
   val islandY: Int = 0,
   val islandDx: Int = 0,
   val islandDy: Int = 0,
+  /** Movable island: it can be dragged in the game and remembers where it was left. Off means fixed. */
+  val islandMove: Boolean = false,
 )
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
@@ -82,7 +84,7 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
     mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true), style = o.optString("style", "basic"), opacity = o.optInt("opacity", 90).coerceIn(20, 100),
     islandSize = o.optInt("islandSize", 100).coerceIn(60, 160), islandPos = o.optString("islandPos", "top"), islandName = o.optBoolean("islandName", false),
     islandColor = c("islandColor", d.islandColor), islandX = o.optInt("islandX", 50).coerceIn(0, 100), islandY = o.optInt("islandY", 0).coerceIn(0, 100),
-    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200),
+    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false),
   )
 }
 

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { PanResponder, Pressable, Text, TextInput, View } from 'react-native';
+import { api } from '../native/api';
 import { useStore } from '../store/store';
 import { useTheme } from '../theme/ThemeContext';
 import { AppSwitch, Btn, Chip, Icon, Slider, T, tap } from '../ui/primitives';
@@ -47,7 +48,7 @@ function PhoneMock() {
       last.current = n;
       setDrag(n);
     },
-    onPanResponderRelease: () => { const n = last.current; setDrag(null); update((x) => ({ ...x, floatPos: 'custom', floatX: n.x, floatY: n.y })); },
+    onPanResponderRelease: () => { const n = last.current; setDrag(null); api.storageSet('islandSpot', ''); update((x) => ({ ...x, floatPos: 'custom', floatX: n.x, floatY: n.y })); },
     onPanResponderTerminate: () => setDrag(null),
   })).current;
 
@@ -114,10 +115,24 @@ export function IslandSettings({ onPreview }: { onPreview: () => void }) {
 
   return (
     <View style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
-      <T w="600">Position</T>
+      <T w="600">Mode</T>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+        <Chip h={36} label="Fixed" on={!state.floatMove} onPress={() => set({ floatMove: false })} />
+        <Chip h={36} label="Movable" on={state.floatMove} onPress={() => set({ floatMove: true })} />
+      </View>
+      <T v="sub" style={{ marginTop: 8 }}>
+        {state.floatMove ? 'Drag the closed island in your game to move it. It remembers where you leave it.' : 'The island stays exactly where the position below puts it.'}
+      </T>
+      {state.floatMove ? (
+        <View style={{ marginTop: 10, flexDirection: 'row' }}>
+          <Btn label="Reset moved position" v="tonal" onPress={() => api.storageSet('islandSpot', '')} />
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: 18 }}><T w="600">Position</T></View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
         {([['top', 'Top (camera)'], ['right', 'Right (landscape)'], ['custom', 'Custom']] as const).map(([k, l]) => (
-          <Chip key={k} h={36} label={l} on={state.floatPos === k} onPress={() => set({ floatPos: k })} />
+          <Chip key={k} h={36} label={l} on={state.floatPos === k} onPress={() => { api.storageSet('islandSpot', ''); set({ floatPos: k }); }} />
         ))}
       </View>
       <View style={{ marginTop: 12 }}><PhoneMock /></View>

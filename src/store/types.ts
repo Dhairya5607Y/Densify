@@ -51,6 +51,8 @@ export type AppState = {
   /** Fine-tune nudge in dp, to line the island up exactly over the camera. */
   floatDx: number;
   floatDy: number;
+  /** Movable: the island can be dragged in the game and remembers its spot. Off means fixed in place. */
+  floatMove: boolean;
   /** Set once the new island design has been applied to saved settings. */
   islandV2: boolean;
   /** Write DENSIFY (light blue) inside the island. Off by default. */

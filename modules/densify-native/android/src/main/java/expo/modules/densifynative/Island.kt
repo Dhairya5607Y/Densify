@@ -23,6 +23,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
@@ -113,6 +114,9 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   private var side = false
   /** Phone turned sideways while the island is still on Top: the open card becomes one wide, short row so it covers less of the game. */
   private var compact = false
+  /** Where the user dragged the island to (percent of screen width and height), only used while it is movable. */
+  private var free: Pair<Float, Float>? = null
+  private var shownFree = ""
   private var sideLeft = false
   private var cw = 0
   private var ch = 0
@@ -167,7 +171,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   override fun refreshTheme(n: PanelTheme) {
     main.post {
       val m = realMetrics(ctx)
-      val turned = visible && (m.widthPixels != lastW || m.heightPixels != lastH)
+      val turned = visible && (m.widthPixels != lastW || m.heightPixels != lastH || readFreeRaw() != shownFree)
       if (n == rawTheme && !turned) return@post
       if (!visible) { rawTheme = n; return@post }
       val wasOpen = expanded
@@ -238,7 +242,9 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     cs = min(sz, 1.25f)
     val m = realMetrics(ctx)
     lastW = m.widthPixels; lastH = m.heightPixels
-    compact = lastW > lastH && theme.islandPos != "right"
+    shownFree = readFreeRaw()
+    free = if (theme.islandMove) parseFree(shownFree) else null
+    compact = lastW > lastH && !(theme.islandPos == "right" && free == null)
 
     val bg = rounded(cardColor, px(18f).toFloat())
     back = bg
@@ -246,11 +252,37 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       background = bg
       clipToOutline = true
       outlineProvider = ViewOutlineProvider.BACKGROUND
-      setOnClickListener { if (!expanded) setExpanded(true) }
-      // A touch anywhere outside the open card closes it. The touch still reaches the game underneath.
-      setOnTouchListener { _, e ->
-        if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && expanded && SystemClock.elapsedRealtime() >= Hub.floatForceUntil) setExpanded(false)
-        false
+      // Tap opens it. When the island is movable, dragging the closed pill moves it. A touch outside the open card closes it
+      // (and still reaches the game underneath).
+      val slop = ViewConfiguration.get(ctx).scaledTouchSlop
+      var downX = 0f; var downY = 0f; var startCx = 0f; var startTop = 0f; var dragging = false
+      setOnTouchListener { v, e ->
+        when (e.actionMasked) {
+          MotionEvent.ACTION_OUTSIDE -> {
+            if (expanded && SystemClock.elapsedRealtime() >= Hub.floatForceUntil) setExpanded(false)
+            false
+          }
+          MotionEvent.ACTION_DOWN -> {
+            downX = e.rawX; downY = e.rawY; dragging = false
+            val loc = IntArray(2); v.getLocationOnScreen(loc)
+            startCx = loc[0] + v.width / 2f; startTop = loc[1].toFloat()
+            true
+          }
+          MotionEvent.ACTION_MOVE -> {
+            if (theme.islandMove && !expanded) {
+              if (!dragging && (abs(e.rawX - downX) > slop || abs(e.rawY - downY) > slop)) dragging = true
+              if (dragging) moveTo(startCx + e.rawX - downX, startTop + e.rawY - downY)
+            }
+            true
+          }
+          MotionEvent.ACTION_UP -> {
+            if (dragging) saveFree() else if (!expanded) setExpanded(true)
+            dragging = false
+            true
+          }
+          MotionEvent.ACTION_CANCEL -> { dragging = false; true }
+          else -> false
+        }
       }
     }
     host = h
@@ -409,14 +441,43 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     return v.coerceIn(lo, hi)
   }
 
+  private fun readFreeRaw(): String = Hub.prefs.getString("islandSpot", "") ?: ""
+
+  private fun parseFree(s: String): Pair<Float, Float>? {
+    val p = s.split(",")
+    if (p.size < 2) return null
+    val x = p[0].toFloatOrNull() ?: return null
+    val y = p[1].toFloatOrNull() ?: return null
+    return Pair(x.coerceIn(0f, 100f), y.coerceIn(0f, 100f))
+  }
+
+  /** Follows the finger while the movable island is dragged: cx is the pill's centre, top its top edge, in screen pixels. */
+  private fun moveTo(cx: Float, top: Float) {
+    val w = lastW; val h = lastH
+    if (w <= 0 || h <= 0) return
+    val x = cx.coerceIn(cw / 2f, max(cw / 2f, w - cw / 2f))
+    val y = top.coerceIn(0f, max(0f, (h - ch).toFloat()))
+    free = Pair(x / w * 100f, y / h * 100f)
+    computeLayout()
+    render()
+  }
+
+  private fun saveFree() {
+    val f = free ?: return
+    Hub.prefs.edit().putString("islandSpot", "${f.first},${f.second}").apply()
+    shownFree = readFreeRaw()
+  }
+
   /** Works out where the pill and the open card go. Called when the island is built, when the cut-out becomes known, and after a rotation. */
   private fun computeLayout() {
     val c = content ?: return
     val m = realMetrics(ctx)
     val w = m.widthPixels; val h = m.heightPixels
     lastW = w; lastH = h
-    side = theme.islandPos == "right"
-    val custom = theme.islandPos == "custom"
+    side = theme.islandPos == "right" && free == null
+    val custom = theme.islandPos == "custom" || free != null
+    val fx = free?.first ?: theme.islandX.toFloat()
+    val fy = free?.second ?: theme.islandY.toFloat()
     val rc = if (custom) null else pickCutout(w, h)
     sideLeft = side && rc != null && rc.left <= 2 && rc.right < w - 2
 
@@ -431,16 +492,17 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val margin = px(10f)
     ew = min(px((if (compact) 560f else 344f) * cs), w - 2 * margin).coerceAtLeast(px(180f))
 
-    val dx = px(theme.islandDx.toFloat()); val dy = px(theme.islandDy.toFloat())
+    val dx = if (free != null) 0 else px(theme.islandDx.toFloat())
+    val dy = if (free != null) 0 else px(theme.islandDy.toFloat())
     val pad = px(18f * cs)
     var padL = pad; var padR = pad; var padT = px((if (compact) 12f else 16f) * cs)
 
     if (!side) {
-      val cx = if (custom) w * theme.islandX / 100f else (rc?.exactCenterX() ?: (w / 2f))
+      val cx = if (custom) w * fx / 100f else (rc?.exactCenterX() ?: (w / 2f))
       val cxC = (cx + dx).coerceIn(cw / 2f, w - cw / 2f)
       xC = (cxC - w / 2f).roundToInt()
       xE = (clampCenter(cxC, ew / 2f, w, margin) - w / 2f).roundToInt()
-      val top0 = if (custom) (h * theme.islandY / 100f).roundToInt() else if (rc != null) rc.centerY() - ch / 2 else px(8f)
+      val top0 = if (custom) (h * fy / 100f).roundToInt() else if (rc != null) rc.centerY() - ch / 2 else px(8f)
       yC = (top0 + dy).coerceIn(0, max(0, h - ch))
       if (rc != null) padT = max(padT, rc.bottom - yC + px(8f * cs))
       edgeC = 0; edgeE = 0
