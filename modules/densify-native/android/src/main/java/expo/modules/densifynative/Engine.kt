@@ -56,11 +56,17 @@ data class PanelTheme(
   /** Floating panel style: "basic" (a draggable bubble) or "island" (a pill at the top of the screen), and the island's opacity in percent. */
   val style: String = "basic",
   val opacity: Int = 90,
-  /** Dynamic island: size in percent and where it sits: "top" (camera side), "right" (landscape side). Dragging it anywhere overrides this until a position is picked again. */
+  /** Dynamic island: size in percent and where it sits: "top" (camera side), "right" (landscape side) or "custom" (islandX / islandY, set in the app). */
   val islandSize: Int = 100,
   val islandPos: String = "top",
   /** Write DENSIFY (in light blue) inside the island. Off by default: a pure black pill. */
   val islandName: Boolean = false,
+  /** Island colour (opaque ARGB, black by default), where a custom position sits (percent of the screen width and height) and a fine-tune nudge in dp. */
+  val islandColor: Int = 0xFF000000.toInt(),
+  val islandX: Int = 50,
+  val islandY: Int = 0,
+  val islandDx: Int = 0,
+  val islandDy: Int = 0,
 )
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
@@ -75,6 +81,8 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
     r = o.optDouble("r", d.r.toDouble()).toFloat(), rs = o.optDouble("rs", d.rs.toDouble()).toFloat(), bw = o.optDouble("bw", d.bw.toDouble()).toFloat(),
     mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true), style = o.optString("style", "basic"), opacity = o.optInt("opacity", 90).coerceIn(20, 100),
     islandSize = o.optInt("islandSize", 100).coerceIn(60, 160), islandPos = o.optString("islandPos", "top"), islandName = o.optBoolean("islandName", false),
+    islandColor = c("islandColor", d.islandColor), islandX = o.optInt("islandX", 50).coerceIn(0, 100), islandY = o.optInt("islandY", 0).coerceIn(0, 100),
+    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200),
   )
 }
 

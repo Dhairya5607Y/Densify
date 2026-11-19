@@ -40,9 +40,19 @@ export type AppState = {
   floatStyle: 'basic' | 'island';
   /** Opacity of the dynamic island, 30 to 100 percent. */
   floatOpacity: number;
-  /** Dynamic island size in percent and position: 'top' (camera side) or 'right' (landscape side). Dragging it overrides this. */
+  /** Dynamic island size in percent and position: 'top' (camera side), 'right' (landscape side) or 'custom' (floatX / floatY, placed in the app). */
   floatSize: number;
-  floatPos: 'top' | 'right';
+  floatPos: 'top' | 'right' | 'custom';
+  /** Island colour as #rrggbb. Black by default. */
+  floatColor: string;
+  /** Custom position: the island's centre as a percent of the screen width, and its top edge as a percent of the screen height. */
+  floatX: number;
+  floatY: number;
+  /** Fine-tune nudge in dp, to line the island up exactly over the camera. */
+  floatDx: number;
+  floatDy: number;
+  /** Set once the new island design has been applied to saved settings. */
+  islandV2: boolean;
   /** Write DENSIFY (light blue) inside the island. Off by default. */
   floatName: boolean;
   autoReconnect: boolean;

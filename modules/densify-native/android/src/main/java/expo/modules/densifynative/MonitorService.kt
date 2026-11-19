@@ -23,6 +23,7 @@ class MonitorService : Service() {
   private var floatJob: Job? = null
   private var linkJob: Job? = null
   private var floating: FloatingPanel? = null
+  private var island: IslandPanel? = null
   private var hud: PerfHud? = null
   private var netCb: ConnectivityManager.NetworkCallback? = null
   override fun onBind(intent: Intent?): IBinder? = null
@@ -83,7 +84,8 @@ class MonitorService : Service() {
 
   /** Shows or hides the floating panel according to the user's setting and what is happening on screen. */
   private fun startFloating() {
-    val panel = floating ?: FloatingPanel(this).also { floating = it }
+    val basic = floating ?: FloatingPanel(this).also { floating = it }
+    val isl = island ?: IslandPanel(this).also { island = it }
     val overlay = hud ?: PerfHud(this).also { hud = it }
     floatJob?.cancel()
     floatJob = Hub.scope.launch {
@@ -92,6 +94,9 @@ class MonitorService : Service() {
           runCatching { ShizukuHost.tick(this@MonitorService, Hub.detector.foreground) }
           val c = Hub.engine.config()
           val s = Hub.engine.state.value
+          // The app picks the look: the draggable bubble, or the dynamic island. Only one of them is ever on screen.
+          val panel: PanelUi = if (c.theme.style == "island") isl else basic
+          (if (c.theme.style == "island") basic else isl).hide()
           // A configured game on screen, whether or not its DPI could be applied. It leaves the moment the game does.
           val game = s.frontPkg
           val key = game ?: "always"
@@ -152,7 +157,7 @@ class MonitorService : Service() {
     watcher?.cancel()
     floatJob?.cancel()
     linkJob?.cancel()
-    floating?.hide()
+    floating?.hide(); island?.hide()
     hud?.hide()
     runCatching { getSystemService(NotificationManager::class.java).cancel(Notifs.ID_REC_IDLE) }
     idleShown = false
@@ -165,7 +170,7 @@ class MonitorService : Service() {
     watcher?.cancel()
     floatJob?.cancel()
     linkJob?.cancel()
-    floating?.hide()
+    floating?.hide(); island?.hide()
     hud?.hide()
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null

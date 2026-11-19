@@ -12,6 +12,7 @@ import { Screen } from '../ui/scroll';
 import { useEnsure } from '../logic/permissions';
 import { parseSw } from '../logic/dpi';
 import { Header } from './common';
+import { IslandSettings } from './IslandSettings';
 
 export function Settings() {
   const { state, update } = useStore();
@@ -46,7 +47,7 @@ export function Settings() {
   const preview = async () => {
     if (!(await ensure('floating'))) return;
     api.startMonitoring(); api.previewFloating(15);
-    toast({ title: 'Panel shown for 15 seconds', sub: 'Drag the bubble where you want it.' });
+    toast({ title: 'Panel shown for 15 seconds', sub: state.floatStyle === 'island' ? 'Tap the island to open or close it.' : 'Drag the bubble where you want it.' });
   };
 
   const perm = (ok: boolean) => <T v="sub" c={ok ? t.c.ok : t.c.wn} w="600">{ok ? 'Allowed' : 'Off'}</T>;
@@ -89,18 +90,12 @@ export function Settings() {
 
       <Section title="Floating panel" />
       <Group>
-        <Row leadIcon="layers" title="Show over games" sub="A draggable, scrollable panel in your game's theme: smallest width, stretch, optimize and recording" below={
+        <Row leadIcon="layers" title="Show over games" sub="Shows over your games: the dynamic island, or a draggable panel with smallest width, stretch, optimize and recording" below={
           (['off', 'gaming', 'always'] as const).map((m) => <Chip key={m} h={36} label={m === 'off' ? 'Off' : m === 'gaming' ? 'In games' : 'Always'} on={state.floating === m} onPress={() => setFloating(m)} />)} />
-        <Row leadIcon="smartphone" title="Panel style" sub={state.floatStyle === 'island' ? 'Dynamic island: a slim black pill that sits over your camera. Tap it to open the panel, drag it to move it.' : 'Basic: a draggable logo bubble that snaps to the side of the screen'} below={
+        <Row leadIcon="smartphone" title="Panel style" sub={state.floatStyle === 'island' ? 'Dynamic island: a black pill over your camera. Tap it and it opens into smallest width, Restore and Stretch.' : 'Basic: a draggable logo bubble that snaps to the side of the screen'} below={
           ([['basic', 'Basic'], ['island', 'Dynamic island']] as const).map(([k, l]) => <Chip key={k} h={36} label={l} on={state.floatStyle === k} onPress={() => update((x) => ({ ...x, floatStyle: k }))} />)} />
-        {state.floatStyle === 'island' && (<>
-          <Row leadIcon="opacity" title={`Opacity ${state.floatOpacity}%`} sub="Lower it to see more of the game behind the island" below={<View style={{ flex: 1 }}><Slider value={state.floatOpacity} min={30} max={100} onChange={(v) => update((x) => ({ ...x, floatOpacity: Math.round(v / 5) * 5 }))} /></View>} />
-          <Row leadIcon="open-in-full" title={`Size ${state.floatSize}%`} sub="Make the island smaller or larger" below={<View style={{ flex: 1 }}><Slider value={state.floatSize} min={70} max={150} onChange={(v) => update((x) => ({ ...x, floatSize: Math.round(v / 5) * 5 }))} /></View>} />
-          <Row leadIcon="open-with" title="Position" sub="Top is the camera side. Right is the top of the phone when you hold it sideways. You can also drag the island anywhere while it is showing." below={
-            ([['top', 'Top (camera)'], ['right', 'Right (landscape)']] as const).map(([k, l]) => <Chip key={k} h={36} label={l} on={state.floatPos === k} onPress={() => { api.storageSet('islandFree', ''); update((x) => ({ ...x, floatPos: k })); }} />)} />
-        <Row leadIcon="title" title="Write DENSIFY" sub="Show the name in light blue inside the island. Off keeps it pure black." right={<AppSwitch on={state.floatName} onChange={(v) => update((x) => ({ ...x, floatName: v }))} />} />
-        </>)}
-        <Row leadIcon="visibility" title="Preview the panel" sub="Shows it for 15 seconds so you can place it" onPress={preview} />
+        {state.floatStyle === 'island' && <IslandSettings onPreview={preview} />}
+        {state.floatStyle !== 'island' && <Row leadIcon="visibility" title="Preview the panel" sub="Shows it for 15 seconds so you can place it" onPress={preview} />}
       </Group>
 
       <Section title="Quick controls" />

@@ -16,7 +16,7 @@ function panelTheme(s: AppState) {
   const c = th.c;
   return {
     bg: argb(c.bg), sf: argb(c.sf, c.bg), sf2: argb(c.sf2, c.bg), bd: argb(c.bd2, c.bg), tx: argb(c.tx), mu: argb(c.mu, c.bg), ac: argb(c.ac), on: argb(c.on),
-    r: Math.min(th.r, 24), rs: Math.min(th.rs, 14), bw: th.bw > 0 ? Math.max(1, th.bw) : 0, mono: th.mono, upper: th.label !== 'sentence', glass: s.glass, dark: th.dark, style: s.floatStyle, opacity: s.floatOpacity, islandSize: s.floatSize, islandPos: s.floatPos, islandName: s.floatName,
+    r: Math.min(th.r, 24), rs: Math.min(th.rs, 14), bw: th.bw > 0 ? Math.max(1, th.bw) : 0, mono: th.mono, upper: th.label !== 'sentence', glass: s.glass, dark: th.dark, style: s.floatStyle, opacity: s.floatOpacity, islandSize: s.floatSize, islandPos: s.floatPos, islandName: s.floatName, islandColor: argb(/^#[0-9a-fA-F]{6}$/.test(s.floatColor) ? s.floatColor : '#000000'), islandX: s.floatX, islandY: s.floatY, islandDx: s.floatDx, islandDy: s.floatDy,
   };
 }
 
@@ -57,6 +57,8 @@ function load(): AppState {
     if (Array.isArray(o.profiles)) o.profiles = o.profiles.map((p: { sw?: number; dpi?: number }) => { const { dpi, ...rest } = p; return { ...rest, sw: rest.sw ?? dpi ?? 420 }; });
     if (typeof o.accent === 'string' && o.accent) { const th = themeById(o.themeId ?? 'manga'); if (accentClashes(th, o.accent)) o.accent = ''; } // a clashing accent made text vanish
     if (Array.isArray(o.profiles)) o.profiles = o.profiles.map((p: { stretch?: { on?: boolean; w?: number; h?: number } }) => (p.stretch ? { ...p, stretch: { on: !!p.stretch.on, w: p.stretch.w ?? 0, h: p.stretch.h ?? 0 } } : p)); // old ratio-based stretch is dropped
+    // The new island starts pure black and fully opaque, once, on top of whatever was saved before.
+    if (o.islandV2 !== true) { o.floatOpacity = 100; o.floatColor = '#000000'; o.islandV2 = true; }
     const perf = o.perf ?? {};
     return {
       ...DEFAULT_STATE, ...o,

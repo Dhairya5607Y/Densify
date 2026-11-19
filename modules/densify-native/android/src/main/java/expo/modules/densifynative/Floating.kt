@@ -70,7 +70,7 @@ private fun readable(t: PanelTheme): PanelTheme {
  * Sizes are in "physical dp" so the panel keeps its size when Densify changes the screen density.
  * The panel takes the app's theme. The tall panel scrolls, so every control stays reachable on a short landscape screen.
  */
-class FloatingPanel(private val ctx: Context) {
+class FloatingPanel(private val ctx: Context) : PanelUi {
   private val wm: WindowManager = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
   private val main = Handler(Looper.getMainLooper())
 
@@ -107,7 +107,7 @@ class FloatingPanel(private val ctx: Context) {
   private val busy = AtomicBoolean(false)
 
   /** The game (or "always") the user dismissed the panel for. The service skips showing it again until that changes. */
-  @Volatile var dismissedKey: String? = null
+  @Volatile override var dismissedKey: String? = null
   @Volatile var visible = false
     private set
 
@@ -121,7 +121,7 @@ class FloatingPanel(private val ctx: Context) {
     }
   }
 
-  fun show(startOpen: Boolean = false) {
+  override fun show(startOpen: Boolean) {
     main.post {
       if (visible) { syncValue(); return@post }
       val canDraw = Build.VERSION.SDK_INT < 23 || runCatching { android.provider.Settings.canDrawOverlays(ctx) }.getOrDefault(false)
@@ -136,7 +136,7 @@ class FloatingPanel(private val ctx: Context) {
     }
   }
 
-  fun hide() {
+  override fun hide() {
     main.post {
       if (!visible) return@post
       main.removeCallbacks(ticker)
@@ -155,7 +155,7 @@ class FloatingPanel(private val ctx: Context) {
   }
 
   /** Called by the service every moment. When the app's theme changed, the panel is rebuilt in the new look. */
-  fun refreshTheme(n: PanelTheme) {
+  override fun refreshTheme(n: PanelTheme) {
     main.post {
       if (n == rawTheme) return@post
       rawTheme = n
@@ -349,7 +349,7 @@ class FloatingPanel(private val ctx: Context) {
     header.addView(label("Densify", 11f, t.ac, true).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL; letterSpacing = 0.14f }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     header.addView(label("Hide", 12.5f, t.mu, true).apply {
       setPadding(px(12f), px(8f), px(4f), px(8f))
-      setOnClickListener { dismissedKey = Hub.engine.state.value.activePkg ?: "always"; Hub.floatForceUntil = 0L; hide() }
+      setOnClickListener { dismissedKey = Hub.engine.state.value.frontPkg ?: "always"; Hub.floatForceUntil = 0L; hide() }
     })
     attachDrag(header, false)
     pn.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = px(8f) })
