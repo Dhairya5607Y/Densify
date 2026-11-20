@@ -55,11 +55,17 @@ export function Surface({ children, style, radius, pad }: { children?: React.Rea
     shadowColor: '#0c1620', shadowOpacity: t.elev ? 0.08 : 0, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, padding: pad,
   };
   if (t.glass) {
+    const frosted = t.material === 'frosted'; const fluid = t.material === 'fluid';
     return (
-      <View style={[base, { shadowOpacity: t.dark ? 0.35 : 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, shadowColor: '#000' }, style]}>
-        <GlassBlur intensity={t.dark ? 45 : 60} />
-        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 0.7, y: 1 }} style={StyleSheet.absoluteFill} />
-        <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 14, right: 14, height: 1, backgroundColor: 'rgba(255,255,255,0.55)' }} />
+      <View style={[base, { shadowOpacity: frosted ? 0.1 : t.dark ? 0.35 : 0.12, shadowRadius: frosted ? 18 : 14, shadowOffset: { width: 0, height: 6 }, shadowColor: frosted ? '#1a2b44' : '#000' }, style]}>
+        <GlassBlur intensity={frosted ? 90 : fluid ? 60 : t.dark ? 45 : 60} />
+        {frosted ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.16)' }]} /> : null}
+        {frosted ? null : (
+          <LinearGradient pointerEvents="none"
+            colors={fluid ? [t.c.acs, 'rgba(167,139,250,0.10)', 'rgba(255,255,255,0)'] : ['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }} end={fluid ? { x: 1, y: 1 } : { x: 0.7, y: 1 }} style={StyleSheet.absoluteFill} />
+        )}
+        {frosted ? null : <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 14, right: 14, height: 1, backgroundColor: fluid ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.55)' }} />}
         {children}
       </View>
     );
