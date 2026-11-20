@@ -239,6 +239,9 @@ class DensifyNativeModule : Module() {
     Function("recResume") { RecorderService.send(ctx, RecorderService.ACTION_RESUME); true }
     Function("recStop") { RecorderService.send(ctx, RecorderService.ACTION_STOP); true }
     Function("recOpenLast") { RecorderService.openLast(ctx) }
+    Function("replayStatus") { ReplayState.toJson() }
+    Function("replayToggle") { ReplayService.toggle(ctx); true }
+    Function("replaySave") { ReplayService.save(ctx); true }
 
     // ---- monitoring ----
     Function("startMonitoring") { MonitorService.start(ctx); true }

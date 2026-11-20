@@ -15,6 +15,8 @@ const RES: [RecCfg['res'], string][] = [['sd', '480p'], ['hd', '720p'], ['fhd', 
 const FPS = [30, 60, 90, 120];
 const RATES = [0, 8, 16, 25, 40, 60, 80];
 
+const REPLAY_SECS = [15, 30, 60, 120];
+
 const clock = (ms: number) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 export function Recorder({ tab }: { tab?: boolean }) {
@@ -31,6 +33,20 @@ export function Recorder({ tab }: { tab?: boolean }) {
     const id = setTimeout(() => setPlan(api.recPlan()), 450);
     return () => clearTimeout(id);
   }, [r.res, r.fps, r.mbps, r.codec, r.orient]);
+
+  const [rp, setRp] = useState(() => api.replayStatus());
+  const [secs, setSecs] = useState(() => Number(api.storageGet('replaySec')) || 30);
+  useEffect(() => { const id = setInterval(() => setRp(api.replayStatus()), 1000); return () => clearInterval(id); }, []);
+  const pickSecs = (n: number) => { setSecs(n); api.storageSet('replaySec', String(n)); };
+  const replayOn = rp.state === 'buffering';
+  const toggleReplay = async () => {
+    if (!replayOn) {
+      if (rec.state !== 'idle') { toast({ title: 'Stop the recording first', sub: 'Instant replay and the recorder share one screen-capture permission.' }); return; }
+      if (!(await ensure('notifications'))) return;
+      api.startMonitoring();
+    }
+    api.replayToggle();
+  };
 
   const idle = rec.state === 'idle';
   const start = async () => {
@@ -65,6 +81,15 @@ export function Recorder({ tab }: { tab?: boolean }) {
         {rec.notes ? <T v="sub" c={t.c.mu} style={{ marginTop: 10 }}>{rec.notes}</T> : null}
         <View style={{ marginTop: 12 }}><Btn wide v="tonal" label="Watch last recording" onPress={last} /></View>
       </Surface>
+
+      <Section title="Instant replay" />
+      <Group>
+        <Row leadIcon="history" title="Keep the last seconds" sub={replayOn ? `On. ${rp.info}. Nothing is saved until you tap Clip.` : 'Records quietly in memory and keeps only the newest seconds. Tap Clip after a great moment to save it.'} right={<AppSwitch on={replayOn} onChange={toggleReplay} />} />
+        <Row title="Length" sub="How far back a clip goes. Longer uses more memory, about 1 MB per second." below={REPLAY_SECS.map((n) => <Chip key={n} h={36} label={`${n}s`} on={secs === n} onPress={() => pickSecs(n)} />)} />
+      </Group>
+      {replayOn ? <View style={{ marginTop: 10 }}><Btn wide v="pri" label={`Save the last ${rp.seconds} seconds`} onPress={() => api.replaySave()} /></View> : null}
+      {rp.error ? <T v="sub" c={t.c.wn} style={{ marginHorizontal: 10, marginTop: 10 }}>{rp.error}</T> : null}
+      <T v="sub" style={{ marginHorizontal: 10, marginTop: 10 }}>The island shows a Clip button while this is on, and so does the notification. Clips go to Movies/Densify. The length applies the next time you turn it on. It uses the recorder's resolution, capped at 1080p.</T>
 
       <Section title="Quality" />
       <Group>

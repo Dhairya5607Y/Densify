@@ -73,4 +73,7 @@ export interface NativeApi {
   recResume(): boolean;
   recStop(): boolean;
   recOpenLast(): boolean;
+  replayStatus(): string;
+  replayToggle(): boolean;
+  replaySave(): boolean;
 }

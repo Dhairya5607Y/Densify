@@ -79,6 +79,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   private var host: FrameLayout? = null
   private var lp: WindowManager.LayoutParams? = null
   private var back: GradientDrawable? = null
+  private var sheen: View? = null
   private var nameLabel: TextView? = null
   private var content: LinearLayout? = null
   private var iconView: ImageView? = null
@@ -106,6 +107,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
 
   // Live activities: the island shows what is happening without being opened
   private var builtRec = false
+  private var builtClip = false
   private var bannerOn = false
   private var bp = 0f
   private var bw = 0
@@ -168,7 +170,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     override fun run() {
       if (!visible) return
       val rec = RecState.state != "idle"
-      if (rec != builtRec) { rebuild(); return }
+      if (rec != builtRec || (ReplayState.state == "buffering") != builtClip) { rebuild(); return }
       if (rec && !expanded && !bannerOn) nameLabel?.text = recText()
       watchGame()
       watchBattery()
@@ -215,6 +217,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
 
   private fun attach() {
     builtRec = RecState.state != "idle"
+    builtClip = ReplayState.state == "buffering"
     build()
     val h = host ?: return
     val p = lp ?: return
@@ -236,7 +239,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     bannerAnim?.let { a -> bannerAnim = null; a.cancel() }
     bannerOn = false; bp = 0f
     host?.let { v -> runCatching { wm.removeView(v) } }
-    host = null; lp = null; back = null; nameLabel = null; content = null; iconView = null; valueLabel = null; captionLabel = null; stretchBtn = null
+    host = null; lp = null; back = null; nameLabel = null; content = null; iconView = null; valueLabel = null; captionLabel = null; stretchBtn = null; sheen = null
     visible = false; expanded = false; progress = 0f; pending = null; shownPkg = null; shownLabel = null
   }
 
@@ -254,7 +257,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val light = islandLum(cardColor) > 0.45
     fg = if (light) 0xFF0B0B0D.toInt() else I_WHITE
     muted = if (light) 0x99000000.toInt() else 0x99FFFFFF.toInt()
-    chip = if (light) 0x1A000000.toInt() else 0x2EFFFFFF.toInt()
+    chip = if (light) 0x1A000000.toInt() else if (theme.islandGlass != "off") 0x3CFFFFFF else 0x2EFFFFFF
     accent = if (light) 0xFF1B6FB5.toInt() else I_BLUE
     onAccent = if (light) I_WHITE else 0xFF06131F.toInt()
   }
@@ -336,6 +339,11 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       gravity = Gravity.CENTER
     }
     nameLabel = nl
+    if (glass != "off") {
+      val sh = View(ctx).apply { background = glassDrawable(); alpha = 0f }
+      sheen = sh
+      h.addView(sh, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
     h.addView(nl, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
 
     val c = buildContent()
@@ -347,7 +355,8 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     lp = WindowManager.LayoutParams(
       px(120f), px(34f), type,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        (if (Build.VERSION.SDK_INT >= 31 && theme.islandGlass == "frosted") WindowManager.LayoutParams.FLAG_BLUR_BEHIND else 0),
       PixelFormat.TRANSLUCENT,
     ).apply {
       gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -355,6 +364,15 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       if (Build.VERSION.SDK_INT >= 30) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
       else if (Build.VERSION.SDK_INT >= 28) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
     }
+  }
+
+  private val glass: String get() = theme.islandGlass
+
+  /** The glass layer of the open card. It fades in as the pill opens, so the closed island stays plain black. */
+  private fun glassDrawable(): GradientDrawable = when (glass) {
+    "frosted" -> GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x40FFFFFF, 0x22FFFFFF)).apply { setStroke(px(1f), 0x55FFFFFF) }
+    "fluid" -> GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x783B82F6, 0x668B5CF6, 0x6622D3EE)).apply { setStroke(px(1f), 0x44FFFFFF) }
+    else -> GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x4DFFFFFF, 0x0DFFFFFF, 0x2EFFFFFF)).apply { setStroke(px(1f), 0x66FFFFFF) }
   }
 
   private fun buildContent(): LinearLayout {
@@ -401,6 +419,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       head.addView(st, slot())
       head.addView(pill("Hide") { hideForGame() }, slot())
       stopPill()?.let { head.addView(it, slot()) }
+      clipPill()?.let { head.addView(it, slot()) }
       col.addView(head, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
       return col
     }
@@ -412,6 +431,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     row.addView(st, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) })
     row.addView(pill("Hide") { hideForGame() }, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) })
     stopPill()?.let { row.addView(it, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) }) }
+    clipPill()?.let { row.addView(it, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) }) }
     col.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(14f * cs) })
     return col
   }
@@ -530,7 +550,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     cw = min(if (side) short else long, w)
     ch = min(if (side) long else short, h)
     val margin = px(10f)
-    ew = min(px((if (compact) (if (builtRec) 650f else 560f) else 344f) * cs), w - 2 * margin).coerceAtLeast(px(180f))
+    ew = min(px((if (compact) (if (builtRec || builtClip) 650f else 560f) else 344f) * cs), w - 2 * margin).coerceAtLeast(px(180f))
 
     val dx = if (free != null) 0 else px(theme.islandDx.toFloat())
     val dy = if (free != null) 0 else px(theme.islandDy.toFloat())
@@ -592,6 +612,12 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val cardR = px(30f * cs).toFloat()
     back?.cornerRadius = min(lerp(pillR, cardR, k), min(w, ht) / 2f)
     nameLabel?.alpha = (1f - k * 3f).coerceIn(0f, 1f)
+    sheen?.let { sv -> sv.alpha = k; (sv.background as? GradientDrawable)?.cornerRadius = back?.cornerRadius ?: 0f }
+    if (glass == "frosted") {
+      // A see-through card with the screen behind it blurred. Needs Android 12; older phones get the plain tinted card.
+      back?.setColor(((lerp(255f, 170f, k)).roundToInt() shl 24) or (cardColor and 0xFFFFFF))
+      if (Build.VERSION.SDK_INT >= 31) p.blurBehindRadius = (k * px(26f)).roundToInt()
+    }
     content?.alpha = ((k - 0.3f) / 0.7f).coerceIn(0f, 1f)
     val base = (theme.opacity / 100f).coerceIn(0.2f, 1f)
     h.alpha = lerp(base, max(base, 0.94f), k)
@@ -672,8 +698,8 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   }
 
   /** Shows a short message in place of the game name, then puts the name back. */
-  private fun flash(msg: String) {
-    captionLabel?.let { it.text = msg; it.setTextColor(0xFFFF7A7A.toInt()) }
+  private fun flash(msg: String, color: Int = 0xFFFF7A7A.toInt()) {
+    captionLabel?.let { it.text = msg; it.setTextColor(color) }
     main.removeCallbacks(restoreCaption)
     main.postDelayed(restoreCaption, 2_500L)
   }
@@ -717,8 +743,17 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   /** A red dot and the recording time, shown inside the closed pill while the screen recorder runs. */
   private fun recText(): CharSequence {
     val sec = RecState.elapsedMs() / 1000
-    val dot = if (RecState.state == "paused") 0xFFFFB36B.toInt() else 0xFFFF453A.toInt()
+    val dot = if (RecState.state == "paused") 0xFFB9C2CC.toInt() else 0xFFFF453A.toInt()
     return SpannableString("● %d:%02d".format(sec / 60, sec % 60)).apply { setSpan(ForegroundColorSpan(dot), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+  }
+
+  /** Instant replay is on: one tap saves the last seconds. */
+  private fun clipPill(): TextView? {
+    if (!builtClip) return null
+    return pill("Clip") { ReplayService.save(ctx); flash("Saving the last ${ReplayState.seconds}s…", accent) }.apply {
+      background = rounded(accent, px(40f * cs) / 2f)
+      setTextColor(onAccent)
+    }
   }
 
   private fun stopPill(): TextView? {
@@ -753,7 +788,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val pct = level * 100 / full
     val charging = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
     if (!charging && pct < cfg.lowBatteryPercent) {
-      if (!lowShown) { lowShown = true; showBanner("Battery $pct%", 0xFFFFB36B.toInt()) }
+      if (!lowShown) { lowShown = true; showBanner("Battery $pct%", 0xFFFF6B6B.toInt()) }
     } else lowShown = false
   }
 
@@ -845,7 +880,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       val on = Hub.engine.toggleStretch(confirm = true)
       main.post {
         syncStretch()
-        if (!was && !on) flash("Set a stretch size in Densify first")
+        if (!was && !on) flash("Stretch failed. Is Wireless Debugging on?")
       }
     }
   }

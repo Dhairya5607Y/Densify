@@ -69,6 +69,8 @@ data class PanelTheme(
   val islandDy: Int = 0,
   /** Movable island: it can be dragged in the game and remembers where it was left. Off means fixed. */
   val islandMove: Boolean = false,
+  /** Glass look of the OPENED island: off, liquid, frosted or fluid. The closed pill is always the plain island colour. */
+  val islandGlass: String = "off",
 )
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
@@ -84,7 +86,7 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
     mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true), style = o.optString("style", "basic"), opacity = o.optInt("opacity", 90).coerceIn(20, 100),
     islandSize = o.optInt("islandSize", 100).coerceIn(60, 160), islandPos = o.optString("islandPos", "top"), islandName = o.optBoolean("islandName", false),
     islandColor = c("islandColor", d.islandColor), islandX = o.optInt("islandX", 50).coerceIn(0, 100), islandY = o.optInt("islandY", 0).coerceIn(0, 100),
-    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false),
+    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false), islandGlass = o.optString("islandGlass", "off"),
   )
 }
 
@@ -425,8 +427,17 @@ class Engine(private val app: Context) {
   suspend fun toggleStretch(confirm: Boolean = false): Boolean {
     if (_state.value.stretched) { keepingWidth { restoreSizeOnly() }; return false }
     val st = active?.stretch
-    val (w, h) = if (st != null && st.on && st.w > 0 && st.h > 0) Pair(st.w, st.h) else globalSize()
+    val (w, h) = if (st != null && st.on && st.w > 0 && st.h > 0) Pair(st.w, st.h) else globalSize().let { g -> if (g.first > 0 && g.second > 0) g else defaultStretch() }
     return stretchNow(w, h, confirm)
+  }
+
+  /** Used when no stretch size was ever set, so the island's Stretch button works straight away: the same screen, squeezed to 16:9. */
+  private suspend fun defaultStretch(): Pair<Int, Int> {
+    val cur = Hub.adb.readSize().getOrNull() ?: return Pair(0, 0)
+    val long = maxOf(cur.physW, cur.physH); val short = minOf(cur.physW, cur.physH)
+    val tl = minOf(long, short * 16 / 9)
+    val l = (if (tl >= long) long * 9 / 10 else tl) / 2 * 2
+    return Pair(l, short)
   }
 
   fun globalSize(): Pair<Int, Int> = Pair(Hub.prefs.getInt("stretchW", 0), Hub.prefs.getInt("stretchH", 0))

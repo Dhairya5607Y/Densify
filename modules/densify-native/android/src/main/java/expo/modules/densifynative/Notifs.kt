@@ -17,6 +17,7 @@ object Notifs {
   const val ID_BATTERY = 3
   const val ID_REC = 5
   const val ID_REC_IDLE = 6
+  const val ID_REPLAY = 9
 
   fun ensure(ctx: Context) {
     if (Build.VERSION.SDK_INT < 26) return

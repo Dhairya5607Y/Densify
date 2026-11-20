@@ -8,6 +8,7 @@ export type { AdbState, Capabilities, EngineEvent, InstalledApp, SettingsKind };
 export const nativeAvailable = Native != null;
 
 export type RecStatus = { state: 'idle' | 'recording' | 'paused'; elapsedMs: number; info: string; notes: string; name: string; error: string; last: string };
+export type ReplayStatus = { state: 'idle' | 'buffering'; seconds: number; info: string; error: string; lastSaved: string; savedAt: number };
 export type RecCaps = { hevc: boolean; uhd30: boolean; uhd60: boolean; sdk: number };
 export type RecPlan = { w: number; h: number; fps: number; mbps: number; hevc: boolean; label: string; notes: string[] };
 const REC_IDLE: RecStatus = { state: 'idle', elapsedMs: 0, info: '', notes: '', name: '', error: '', last: '' };
@@ -98,6 +99,11 @@ export const api = {
   recResume: () => (Native ? Native.recResume() : false),
   recStop: () => (Native ? Native.recStop() : false),
   recOpenLast: () => (Native ? Native.recOpenLast() : false),
+  replayStatus: (): ReplayStatus => {
+    try { return Native ? (JSON.parse(Native.replayStatus()) as ReplayStatus) : { state: 'idle', seconds: 30, info: '', error: '', lastSaved: '', savedAt: 0 }; } catch { return { state: 'idle', seconds: 30, info: '', error: '', lastSaved: '', savedAt: 0 }; }
+  },
+  replayToggle: () => (Native ? Native.replayToggle() : false),
+  replaySave: () => (Native ? Native.replaySave() : false),
 };
 
 /** Polls the recorder once a second while the screen that shows it is open. */

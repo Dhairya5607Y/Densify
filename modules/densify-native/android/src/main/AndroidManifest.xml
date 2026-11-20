@@ -39,6 +39,11 @@
     <activity android:name="expo.modules.densifynative.RecordConsentActivity" android:exported="false"
         android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true"
         android:taskAffinity="" android:launchMode="singleTask" />
+    <service android:name="expo.modules.densifynative.ReplayService" android:exported="false"
+        android:foregroundServiceType="mediaProjection" />
+    <activity android:name="expo.modules.densifynative.ReplayConsentActivity" android:exported="false"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true"
+        android:taskAffinity="" android:launchMode="singleTask" />
     <receiver android:name="expo.modules.densifynative.PairingReceiver" android:exported="false" />
     <service android:name="expo.modules.densifynative.ApiService" android:exported="true">
       <intent-filter><action android:name="com.densify.app.api.BIND" /></intent-filter>
