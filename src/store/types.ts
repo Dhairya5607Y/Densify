@@ -28,6 +28,8 @@ export type AppState = {
   themeId: string;
   /** Liquid glass overlay on the chosen theme. */
   glass: boolean;
+  /** Which glass style is used while glass is on. */
+  glassStyle: 'liquid' | 'frosted' | 'fluid';
   accent: string;
   /** Smallest width (dp) to return to after a game. 0 means the phone's own. */
   defaultSw: number;

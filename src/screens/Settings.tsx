@@ -137,7 +137,6 @@ export function Settings() {
           return (
             <Pressable key={th.id} onPress={() => update((s) => ({ ...s, themeId: th.id, accent: s.accent && accentClashes(th, s.accent) ? '' : s.accent }))} style={{ width: '30%', flexGrow: 1 }}>
               <View style={{ height: 84, borderRadius: Math.min(th.r, 22), backgroundColor: th.c.bg, borderWidth: on ? 2 : 1, borderColor: on ? t.c.ac : t.c.bd2, padding: 9, justifyContent: 'flex-end', gap: 6, overflow: 'hidden' }}>
-                {th.material ? <View style={{ position: 'absolute', top: -20, right: -14, width: 74, height: 74, borderRadius: 37, backgroundColor: th.swatch[th.swatch.length - 1], opacity: 0.4 }} /> : null}
                 <View style={{ height: 30, borderRadius: Math.min(th.rs, 11), backgroundColor: th.c.sf, borderWidth: 1, borderColor: th.c.bd2, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, gap: 6 }}>
                   <View style={{ width: 10, height: 10, borderRadius: th.surface === 'hud' ? 0 : 5, backgroundColor: th.c.ac }} />
                   <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: th.c.mu, opacity: 0.5 }} />
@@ -149,7 +148,13 @@ export function Settings() {
         })}
       </View>
       <T v="sub" style={{ marginHorizontal: 10, marginTop: 10 }}>{THEMES.find((x) => x.id === state.themeId)?.desc}</T>
-      <View style={{ marginTop: 12 }}><Group><Row leadIcon="blur-on" title="Liquid glass" sub={THEMES.find((x) => x.id === state.themeId)?.material ? 'This theme is already glass. Pick another theme to add liquid glass on top of it.' : 'Frosted, translucent surfaces and a glowing backdrop on top of any theme, like Manga + glass or Paper + glass'} right={<AppSwitch on={state.glass} disabled={!!THEMES.find((x) => x.id === state.themeId)?.material} onChange={(v) => update((x) => ({ ...x, glass: v }))} />} /></Group></View>
+      <View style={{ marginTop: 12 }}><Group>
+        <Row leadIcon="blur-on" title="Glass" sub={!state.glass ? 'Plain surfaces' : state.glassStyle === 'frosted' ? 'Frosted: milky, heavily blurred panes over soft light. Calm and clean.' : state.glassStyle === 'fluid' ? 'Fluid: clear glass over slowly flowing colour. Vivid and alive.' : 'Liquid: shiny, translucent glass with a glowing backdrop.'} below={
+          ([['off', 'Off'], ['liquid', 'Liquid'], ['frosted', 'Frosted'], ['fluid', 'Fluid']] as const).map(([k, l]) => (
+            <Chip key={k} h={36} label={l} on={k === 'off' ? !state.glass : state.glass && state.glassStyle === k}
+              onPress={() => update((x) => (k === 'off' ? { ...x, glass: false } : { ...x, glass: true, glassStyle: k }))} />
+          ))} />
+      </Group></View>
       <Section title="Accent colour" action={state.accent ? 'Reset' : undefined} onAction={() => update((s) => ({ ...s, accent: '' }))} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {ACCENTS.map((c) => (

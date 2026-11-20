@@ -11,7 +11,7 @@ export type Theme = {
   swatch: string[];
   /** Liquid glass overlay: frosted translucent surfaces over a soft glowing backdrop. */
   glass?: boolean;
-  /** Themes that are glass by design. 'frosted': milky, heavily blurred, calm. 'fluid': vivid colour that drifts slowly behind clear glass. */
+  /** Set by withGlass: which glass style is on top of this theme (none = liquid). */
   material?: 'frosted' | 'fluid';
 };
 
@@ -32,10 +32,6 @@ export const THEMES: Theme[] = [
     c: { bg: '#ffffff', sf: '#eff6fd', sf2: '#dfecfa', bd: 'rgba(11,120,224,.12)', bd2: 'rgba(11,120,224,.24)', tx: '#10161c', tx2: '#38434e', mu: '#66727f', ac: '#0b78e0', on: '#ffffff', acs: 'rgba(11,120,224,.12)', ok: '#12875a', wn: '#bd5710', track: '#cfe0f4', scrim: 'rgba(10,20,30,.4)' } },
   { id: 'ember', name: 'Ember', desc: 'AMOLED black, hairlines, warm', dark: true, r: 20, rs: 12, rb: 14, bw: 1, elev: 0, surface: 'outline', blur: 0, mono: false, label: 'upper', switchStyle: 'm3', sliderStyle: 'ios', swatch: ['#000000', '#ff9a4d'],
     c: { ...base, bg: '#000000', sf: '#0d0a08', sf2: '#17120e', bd: 'rgba(255,235,220,.12)', bd2: 'rgba(255,235,220,.22)', tx: '#fbf3ec', tx2: '#d9ccc0', mu: '#938679', ac: '#ff9a4d', on: '#241005', acs: 'rgba(255,154,77,.14)', track: '#2b241e' } },
-  { id: 'frosted', name: 'Frosted Glass', desc: 'Milky frosted panes over soft pastel light, calm and clean', dark: false, glass: true, material: 'frosted', r: 24, rs: 16, rb: 16, bw: 1, elev: 0, surface: 'solid', blur: 40, mono: false, label: 'sentence', switchStyle: 'ios', sliderStyle: 'ios', swatch: ['#e8eef6', '#2f6fe0'],
-    c: { ...base, bg: '#e8eef6', sf: 'rgba(255,255,255,.58)', sf2: 'rgba(255,255,255,.78)', bd: 'rgba(255,255,255,.75)', bd2: 'rgba(40,60,90,.16)', tx: '#141c26', tx2: '#394656', mu: '#64707f', ac: '#2f6fe0', on: '#ffffff', acs: 'rgba(47,111,224,.14)', ok: '#12875a', wn: '#bd5710', track: 'rgba(40,60,90,.14)', scrim: 'rgba(10,20,30,.4)' } },
-  { id: 'fluid', name: 'Fluid Glass', desc: 'Clear glass over slowly flowing aurora colour, vivid and alive', dark: true, glass: true, material: 'fluid', r: 30, rs: 18, rb: 999, bw: 1, elev: 0, surface: 'solid', blur: 50, mono: false, label: 'sentence', switchStyle: 'ios', sliderStyle: 'ios', swatch: ['#070b1a', '#6ee7f9', '#a78bfa'],
-    c: { ...base, bg: '#070b1a', sf: 'rgba(255,255,255,.08)', sf2: 'rgba(255,255,255,.14)', bd: 'rgba(255,255,255,.18)', bd2: 'rgba(255,255,255,.3)', tx: '#f4f7ff', tx2: '#cdd6f0', mu: '#8d99bd', ac: '#6ee7f9', on: '#031319', acs: 'rgba(110,231,249,.16)', track: 'rgba(255,255,255,.14)' } },
 ];
 
 export const themeById = (id: string) => THEMES.find((t) => t.id === id) ?? THEMES[0];
@@ -76,18 +72,22 @@ export function withAccent(t: Theme, hex: string): Theme {
 }
 export const ACCENTS = ['#5cbdff', '#7c9cff', '#b28cff', '#ff7ab8', '#ff6b6b', '#ff9a4d', '#ffd24d', '#8be15c', '#3ef0d0', '#a9b8cc', '#e11d2e', '#0a0a0a'];
 
-/** Liquid glass on top of any theme: keeps its colours and type, swaps the material for frosted translucent glass. */
-export function withGlass(t: Theme): Theme {
-  if (t.material) return t; // Frosted and Fluid Glass are already glass
+export type GlassStyle = 'liquid' | 'frosted' | 'fluid';
+
+/**
+ * Glass on top of any theme: keeps the theme's colours and type, swaps the material.
+ * liquid: shiny translucent glass. frosted: milky, heavily blurred, calm. fluid: clear glass over slowly drifting colour.
+ */
+export function withGlass(t: Theme, style: GlassStyle = 'liquid'): Theme {
   const d = t.dark;
+  const spec = style === 'frosted'
+    ? { sf: d ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.62)', sf2: d ? 'rgba(255,255,255,.17)' : 'rgba(255,255,255,.8)', bd: d ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.8)', bd2: d ? 'rgba(255,255,255,.34)' : 'rgba(12,22,32,.16)', blur: 40, r: 24, rb: 14 }
+    : style === 'fluid'
+      ? { sf: d ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.4)', sf2: d ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.58)', bd: d ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.75)', bd2: d ? 'rgba(255,255,255,.3)' : 'rgba(12,22,32,.14)', blur: 50, r: 28, rb: 999 }
+      : { sf: d ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.5)', sf2: d ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.68)', bd: d ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.9)', bd2: d ? 'rgba(255,255,255,.32)' : 'rgba(12,22,32,.16)', blur: 30, r: 22, rb: 14 };
   return {
-    ...t, glass: true, surface: t.surface === 'hud' ? 'hud' : 'solid', blur: 30, bw: 1, elev: 0,
-    r: Math.max(t.r, 22), rs: Math.max(t.rs, 14), rb: Math.max(t.rb, 14),
-    c: { ...t.c,
-      sf: d ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.5)',
-      sf2: d ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.68)',
-      bd: d ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.9)',
-      bd2: d ? 'rgba(255,255,255,.32)' : 'rgba(12,22,32,.16)',
-    },
+    ...t, glass: true, material: style === 'liquid' ? undefined : style, surface: t.surface === 'hud' ? 'hud' : 'solid', blur: spec.blur, bw: 1, elev: 0,
+    r: Math.max(t.r, spec.r), rs: Math.max(t.rs, 14), rb: spec.rb === 999 ? 999 : Math.max(t.rb, spec.rb),
+    c: { ...t.c, sf: spec.sf, sf2: spec.sf2, bd: spec.bd, bd2: spec.bd2 },
   };
 }

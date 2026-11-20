@@ -24,6 +24,16 @@ export function GlassBlur({ intensity = 40 }: { intensity?: number }) {
   return <BlurView pointerEvents="none" intensity={intensity} tint={t.dark ? 'dark' : 'light'} blurTarget={ref ?? undefined} blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />;
 }
 
+/**
+ * The three colours of the glass scene, taken from the theme underneath so it always matches.
+ * Manga stays black and white, light themes get pastel light, dark themes get deeper colour.
+ */
+function glassTones(t: { id: string; dark: boolean; c: { ac: string } }, vivid = false): [string, string, string, number] {
+  if (t.id === 'manga') return ['#8a8a86', '#c4c4c0', '#6b6b68', vivid ? 0.4 : 0.45];
+  if (t.dark) return vivid ? [t.c.ac, '#8b5cf6', '#f472b6', 0.5] : [t.c.ac, '#7c5cff', '#4a90d9', 0.34];
+  return vivid ? [t.c.ac, '#a78bfa', '#fb9fc4', 0.4] : ['#9ec5ff', '#d6bfff', '#ffcfae', 0.7];
+}
+
 /** A long, soft-edged band of colour. Both ends fade out, so there are no hard edges, only a smooth wash. */
 function Band({ color, alpha, top, rot, style }: { color: string; alpha: number; top: string; rot: string; style?: object }) {
   return (
@@ -36,12 +46,13 @@ function Band({ color, alpha, top, rot, style }: { color: string; alpha: number;
 /** Frosted Glass: still, pastel light that the milky panes blur. */
 function FrostedArt() {
   const t = useTheme();
+  const [c1, c2, c3, a] = glassTones(t);
   return (
     <>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg }]} />
-      <Band color="#9ec5ff" alpha={0.7} top="-6%" rot="-18deg" />
-      <Band color="#d6bfff" alpha={0.6} top="30%" rot="-18deg" />
-      <Band color="#ffcfae" alpha={0.5} top="62%" rot="-18deg" />
+      <Band color={c1} alpha={a} top="-6%" rot="-18deg" />
+      <Band color={c2} alpha={a * 0.85} top="30%" rot="-18deg" />
+      <Band color={c3} alpha={a * 0.7} top="62%" rot="-18deg" />
     </>
   );
 }
@@ -49,6 +60,7 @@ function FrostedArt() {
 /** Fluid Glass: aurora colour that drifts slowly behind clear glass. Cheap: only transforms move, on the native thread. */
 function FluidArt() {
   const t = useTheme();
+  const [c1, c2, c3, al] = glassTones(t, true);
   const a = useRef(new Animated.Value(0)).current;
   const b = useRef(new Animated.Value(0)).current;
   const c = useRef(new Animated.Value(0)).current;
@@ -65,9 +77,9 @@ function FluidArt() {
   return (
     <>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: t.c.bg }]} />
-      <Band color={t.c.ac} alpha={0.55} top="-8%" rot="0deg" style={drift(a, 50, 70)} />
-      <Band color="#8b5cf6" alpha={0.5} top="28%" rot="0deg" style={drift(b, 70, 50)} />
-      <Band color="#f472b6" alpha={0.38} top="58%" rot="0deg" style={drift(c, 40, 80)} />
+      <Band color={c1} alpha={al} top="-8%" rot="0deg" style={drift(a, 50, 70)} />
+      <Band color={c2} alpha={al * 0.9} top="28%" rot="0deg" style={drift(b, 70, 50)} />
+      <Band color={c3} alpha={al * 0.7} top="58%" rot="0deg" style={drift(c, 40, 80)} />
     </>
   );
 }

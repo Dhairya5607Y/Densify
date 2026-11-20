@@ -117,7 +117,7 @@ function Themed() {
   const { state } = useStore();
   const base = themeById(state.themeId);
   const accented = state.accent ? withAccent(base, state.accent) : base;
-  const theme = state.glass ? withGlass(accented) : accented;
+  const theme = state.glass ? withGlass(accented, state.glassStyle) : accented;
   return (
     <ThemeProvider theme={theme}>
       <GlassProvider>
