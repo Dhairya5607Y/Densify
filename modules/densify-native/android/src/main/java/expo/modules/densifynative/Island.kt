@@ -4,6 +4,8 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Outline
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -11,11 +13,15 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.TextUtils
+import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Display
 import android.view.DisplayCutout
@@ -98,6 +104,15 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   private var shownPkg: String? = null
   private var shownLabel: String? = null
 
+  // Live activities: the island shows what is happening without being opened
+  private var builtRec = false
+  private var bannerOn = false
+  private var bp = 0f
+  private var bw = 0
+  private var bannerAnim: ValueAnimator? = null
+  private var lastFront: String? = null
+  private var lowShown = false
+
   /** The smallest width the user has tapped to but that has not been applied yet. */
   @Volatile private var pending: Int? = null
   private val busy = AtomicBoolean(false)
@@ -143,6 +158,23 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     if (visible) { computeLayout(); render() }
   }
   private val restoreCaption = Runnable { paintCaption() }
+  private val bannerEnd = Runnable { animateBanner(0f) }
+  private var bannerPkg: String? = null
+  private val gameBanner = Runnable {
+    val pkg = bannerPkg ?: return@Runnable
+    showBanner("${labelOf(pkg) ?: "Game"} · ${currentSw()} sw", fg)
+  }
+  private val liveTick = object : Runnable {
+    override fun run() {
+      if (!visible) return
+      val rec = RecState.state != "idle"
+      if (rec != builtRec) { rebuild(); return }
+      if (rec && !expanded && !bannerOn) nameLabel?.text = recText()
+      watchGame()
+      watchBattery()
+      main.postDelayed(this, 1_000L)
+    }
+  }
 
   // ---------- show / hide ----------
 
@@ -182,6 +214,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   }
 
   private fun attach() {
+    builtRec = RecState.state != "idle"
     build()
     val h = host ?: return
     val p = lp ?: return
@@ -193,11 +226,15 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     // The camera cut-out is not always known the instant the window opens, so look again shortly after.
     main.postDelayed(recheck, 250L)
     main.postDelayed(recheck, 1_000L)
+    main.postDelayed(liveTick, 1_000L)
   }
 
   private fun detach() {
     anim?.let { a -> anim = null; a.cancel() }
     main.removeCallbacks(ticker); main.removeCallbacks(collapseRun); main.removeCallbacks(recheck); main.removeCallbacks(restoreCaption)
+    main.removeCallbacks(liveTick); main.removeCallbacks(bannerEnd); main.removeCallbacks(gameBanner)
+    bannerAnim?.let { a -> bannerAnim = null; a.cancel() }
+    bannerOn = false; bp = 0f
     host?.let { v -> runCatching { wm.removeView(v) } }
     host = null; lp = null; back = null; nameLabel = null; content = null; iconView = null; valueLabel = null; captionLabel = null; stretchBtn = null
     visible = false; expanded = false; progress = 0f; pending = null; shownPkg = null; shownLabel = null
@@ -289,11 +326,12 @@ class IslandPanel(private val ctx: Context) : PanelUi {
 
     // Collapsed: pure black. DENSIFY in light blue only when the user turned it on.
     val nl = TextView(ctx).apply {
-      text = if (theme.islandName) "DENSIFY" else ""
+      text = idleText()
       setTextSize(TypedValue.COMPLEX_UNIT_PX, 11.5f * sz * scale)
-      setTextColor(accent)
+      setTextColor(if (builtRec) fg else accent)
+      maxLines = 1
       typeface = Typeface.DEFAULT_BOLD
-      letterSpacing = 0.22f
+      letterSpacing = if (builtRec) 0.02f else 0.22f
       includeFontPadding = false
       gravity = Gravity.CENTER
     }
@@ -362,6 +400,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       head.addView(pill("Restore") { restore() }, slot().apply { marginStart = px(16f * cs) })
       head.addView(st, slot())
       head.addView(pill("Hide") { hideForGame() }, slot())
+      stopPill()?.let { head.addView(it, slot()) }
       col.addView(head, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
       return col
     }
@@ -372,6 +411,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     row.addView(pill("Restore") { restore() }, LinearLayout.LayoutParams(0, px(40f * cs), 1f))
     row.addView(st, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) })
     row.addView(pill("Hide") { hideForGame() }, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) })
+    stopPill()?.let { row.addView(it, LinearLayout.LayoutParams(0, px(40f * cs), 1f).apply { marginStart = px(8f * cs) }) }
     col.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = px(14f * cs) })
     return col
   }
@@ -490,7 +530,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     cw = min(if (side) short else long, w)
     ch = min(if (side) long else short, h)
     val margin = px(10f)
-    ew = min(px((if (compact) 560f else 344f) * cs), w - 2 * margin).coerceAtLeast(px(180f))
+    ew = min(px((if (compact) (if (builtRec) 650f else 560f) else 344f) * cs), w - 2 * margin).coerceAtLeast(px(180f))
 
     val dx = if (free != null) 0 else px(theme.islandDx.toFloat())
     val dy = if (free != null) 0 else px(theme.islandDy.toFloat())
@@ -536,7 +576,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val p = lp ?: return
     val e = progress
     val k = e.coerceIn(0f, 1f)
-    val w = lerp(cw.toFloat(), ew.toFloat(), e).roundToInt().coerceAtLeast(1)
+    val w = lerp(lerp(cw.toFloat(), max(cw, bw).toFloat(), bp), ew.toFloat(), e).roundToInt().coerceAtLeast(1)
     val ht = lerp(ch.toFloat(), eh.toFloat(), e).roundToInt().coerceAtLeast(1)
     p.width = w; p.height = ht
     if (side) {
@@ -568,6 +608,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     old?.cancel()
     val c = content
     if (on) {
+      cancelBanner()
       c?.visibility = View.VISIBLE
       syncGame(); syncValue(); syncStretch()
       runCatching { h.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
@@ -662,6 +703,106 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     paintCaption()
   }
 
+  // ---------- live activities ----------
+
+  private fun rebuild() {
+    val wasOpen = expanded
+    detach()
+    attach()
+    if (wasOpen) setExpanded(true, animate = false)
+  }
+
+  private fun idleText(): CharSequence = if (builtRec) recText() else if (theme.islandName) "DENSIFY" else ""
+
+  /** A red dot and the recording time, shown inside the closed pill while the screen recorder runs. */
+  private fun recText(): CharSequence {
+    val sec = RecState.elapsedMs() / 1000
+    val dot = if (RecState.state == "paused") 0xFFFFB36B.toInt() else 0xFFFF453A.toInt()
+    return SpannableString("● %d:%02d".format(sec / 60, sec % 60)).apply { setSpan(ForegroundColorSpan(dot), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+  }
+
+  private fun stopPill(): TextView? {
+    if (!builtRec) return null
+    return pill("Stop") { RecorderService.toggle(ctx) }.apply {
+      background = rounded(0xFFD94A4A.toInt(), px(40f * cs) / 2f)
+      setTextColor(I_WHITE)
+    }
+  }
+
+  private fun labelOf(pkg: String): String? = runCatching { ctx.packageManager.let { it.getApplicationLabel(it.getApplicationInfo(pkg, 0)).toString() } }.getOrNull()
+
+  /** When a game comes to the front, the pill briefly widens to say which game and the smallest width. */
+  private fun watchGame() {
+    val pkg = Hub.engine.state.value.frontPkg
+    if (pkg != null && pkg != lastFront && !builtRec) {
+      bannerPkg = pkg
+      main.removeCallbacks(gameBanner)
+      main.postDelayed(gameBanner, 1_200L) // give the width a moment to be applied, so the number is the new one
+    }
+    lastFront = pkg
+  }
+
+  /** Once per drop below the user's low-battery level (when not charging), the pill warns for a moment. */
+  private fun watchBattery() {
+    val cfg = Hub.engine.config()
+    if (!cfg.lowBattery) return
+    val i = runCatching { ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }.getOrNull() ?: return
+    val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+    val full = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
+    if (level < 0 || full <= 0) return
+    val pct = level * 100 / full
+    val charging = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+    if (!charging && pct < cfg.lowBatteryPercent) {
+      if (!lowShown) { lowShown = true; showBanner("Battery $pct%", 0xFFFFB36B.toInt()) }
+    } else lowShown = false
+  }
+
+  private fun showBanner(text: String, color: Int) {
+    if (!visible || expanded || side || bannerOn) return
+    val nl = nameLabel ?: return
+    bannerOn = true
+    nl.text = text
+    nl.setTextColor(color)
+    nl.letterSpacing = 0.02f
+    bw = min(lastW - 2 * px(10f), (nl.paint.measureText(text) + px(44f * sz)).toInt())
+    animateBanner(1f)
+    main.removeCallbacks(bannerEnd)
+    main.postDelayed(bannerEnd, 2_800L)
+  }
+
+  private fun animateBanner(to: Float) {
+    val old = bannerAnim
+    bannerAnim = null
+    old?.cancel()
+    val a = ValueAnimator.ofFloat(bp, to)
+    a.duration = 280L
+    a.interpolator = if (to > 0f) OvershootInterpolator(0.7f) else PathInterpolator(0.25f, 0f, 0.1f, 1f)
+    a.addUpdateListener { bp = it.animatedValue as Float; render() }
+    a.addListener(object : AnimatorListenerAdapter() {
+      override fun onAnimationEnd(animation: Animator) {
+        if (bannerAnim === animation) { bannerAnim = null; if (to == 0f) { bannerOn = false; bp = 0f; restoreLabel() } }
+      }
+    })
+    bannerAnim = a
+    a.start()
+  }
+
+  private fun cancelBanner() {
+    main.removeCallbacks(bannerEnd); main.removeCallbacks(gameBanner)
+    val old = bannerAnim
+    bannerAnim = null
+    old?.cancel()
+    if (bannerOn || bp != 0f) { bannerOn = false; bp = 0f; restoreLabel() }
+  }
+
+  private fun restoreLabel() {
+    nameLabel?.let {
+      it.text = idleText()
+      it.setTextColor(if (builtRec) fg else accent)
+      it.letterSpacing = if (builtRec) 0.02f else 0.22f
+    }
+  }
+
   // ---------- actions ----------
 
   /** Smallest-width steps. The number changes the instant it is tapped and quick taps merge into one change. */
@@ -677,7 +818,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
         while (true) {
           delay(140)
           val target = pending ?: break
-          val r = Hub.engine.adjustSw(target)
+          val r = Hub.engine.adjustSw(target, confirm = true)
           if (pending == target) pending = null
           main.post {
             if (r.isSuccess) { if (pending == null) valueLabel?.text = (r.getOrNull() ?: target).toString() }
@@ -701,7 +842,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
   private fun toggleStretch() {
     Hub.scope.launch {
       val was = Hub.engine.state.value.stretched
-      val on = Hub.engine.toggleStretch()
+      val on = Hub.engine.toggleStretch(confirm = true)
       main.post {
         syncStretch()
         if (!was && !on) flash("Set a stretch size in Densify first")

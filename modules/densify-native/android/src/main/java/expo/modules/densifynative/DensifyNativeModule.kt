@@ -140,7 +140,7 @@ class DensifyNativeModule : Module() {
         mapOf("sw" to d.sw, "physSw" to d.physSw, "dpi" to d.dpi, "physDpi" to d.physDpi, "shortSide" to d.shortSide)
       }
     }
-    AsyncFunction("setSw") { sw: Int, promise: Promise -> run(promise) { Hub.engine.adjustSw(sw).orThrow() } }
+    AsyncFunction("setSw") { sw: Int, promise: Promise -> run(promise) { Hub.engine.adjustSw(sw, confirm = true).orThrow() } }
     AsyncFunction("restoreDefault") { promise: Promise -> run(promise) { Hub.engine.restoreAll().orThrow() } }
 
     // ---- screen size (stretch) ----
@@ -156,7 +156,7 @@ class DensifyNativeModule : Module() {
       if (w in 320..4096 && h in 320..4096) { Hub.prefs.edit().putInt("stretchW", w).putInt("stretchH", h).apply(); true } else false
     }
     AsyncFunction("applyStretch") { w: Int, h: Int, promise: Promise ->
-      run(promise) { if (!Hub.engine.stretchNow(w, h)) throw IllegalStateException("The system did not accept ${w}x$h. Try a size closer to your screen's own."); true }
+      run(promise) { if (!Hub.engine.stretchNow(w, h, confirm = true)) throw IllegalStateException("The system did not accept ${w}x$h. Try a size closer to your screen's own."); true }
     }
     AsyncFunction("resetStretch") { promise: Promise -> run(promise) { Hub.engine.unstretch(); true } }
 

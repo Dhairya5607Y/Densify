@@ -582,7 +582,7 @@ class FloatingPanel(private val ctx: Context) : PanelUi {
         while (true) {
           delay(140)
           val target = pending ?: break
-          val r = Hub.engine.adjustSw(target)
+          val r = Hub.engine.adjustSw(target, confirm = true)
           if (pending == target) pending = null
           main.post {
             if (r.isSuccess) { if (pending == null) valueLabel?.text = (r.getOrNull() ?: target).toString() }
@@ -605,7 +605,7 @@ class FloatingPanel(private val ctx: Context) : PanelUi {
     pending = v
     valueLabel?.text = v.toString()
     Hub.scope.launch {
-      val r = Hub.engine.adjustSw(v)
+      val r = Hub.engine.adjustSw(v, confirm = true)
       if (pending == v) pending = null
       main.post {
         if (r.isFailure) { valueLabel?.text = currentText(); sizeStatus?.text = "Couldn't set it. Check the connection." }
@@ -620,7 +620,7 @@ class FloatingPanel(private val ctx: Context) : PanelUi {
     if (wh == null) { toast("Type it as width*height, e.g. 2160*1080"); return }
     endTyping()
     Hub.scope.launch {
-      val ok = Hub.engine.stretchNow(wh.first, wh.second)
+      val ok = Hub.engine.stretchNow(wh.first, wh.second, confirm = true)
       main.post { if (!ok) toast("Couldn't change the resolution.") else refreshLabels() }
     }
   }

@@ -359,14 +359,19 @@ class Engine(private val app: Context) {
    * The one way to change the width by hand (floating panel, notification, tile, app). The engine learns the new value, so no
    * screen keeps showing the old one, and it will not restore over the change while the game relaunches its window.
    */
-  suspend fun adjustSw(sw: Int): Result<Int> {
+  suspend fun adjustSw(sw: Int, confirm: Boolean = false): Result<Int> {
     val target = sw.coerceIn(SW_MIN, SW_MAX)
+    val before = _state.value.appliedSw ?: 0
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
     val r = Hub.adb.setSmallestWidth(target)
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
     if (r.isSuccess) {
       _state.update { it.copy(appliedSw = r.getOrNull()) }
       Hub.log("Smallest width set to ${r.getOrNull()} by hand")
+      // A big jump made by hand (typed value, preset, holding a step button) asks "Keep these settings?" and undoes itself after 5 seconds.
+      if (confirm && before > 0 && kotlin.math.abs(target - before) * 100 >= before * 20) {
+        Safety.ask("Smallest width $before → ${r.getOrNull()}") { adjustSw(before) }
+      }
     }
     return r
   }
@@ -417,22 +422,32 @@ class Engine(private val app: Context) {
   }
 
   /** Floating-panel action: stretch on/off for the game that is open right now. */
-  suspend fun toggleStretch(): Boolean {
+  suspend fun toggleStretch(confirm: Boolean = false): Boolean {
     if (_state.value.stretched) { keepingWidth { restoreSizeOnly() }; return false }
     val st = active?.stretch
     val (w, h) = if (st != null && st.on && st.w > 0 && st.h > 0) Pair(st.w, st.h) else globalSize()
-    return stretchNow(w, h)
+    return stretchNow(w, h, confirm)
   }
 
   fun globalSize(): Pair<Int, Int> = Pair(Hub.prefs.getInt("stretchW", 0), Hub.prefs.getInt("stretchH", 0))
 
   /** Applies a screen size right now (from the app, the floating panel or a broadcast) and remembers it as the global size. */
-  suspend fun stretchNow(w: Int, h: Int): Boolean {
+  suspend fun stretchNow(w: Int, h: Int, confirm: Boolean = false): Boolean {
     if (w !in 320..4096 || h !in 320..4096) { Hub.log("Stretch skipped: ${w}x$h is out of range"); return false }
+    // What to go back to if the new size is not kept: the screen size and the saved global size from before
+    val prevSize = if (confirm) Hub.adb.readSize().getOrNull() else null
+    val prevW = Hub.prefs.getInt("stretchW", 0); val prevH = Hub.prefs.getInt("stretchH", 0)
     Hub.prefs.edit().putInt("stretchW", w).putInt("stretchH", h).apply()
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
     val ok = keepingWidth { applyStretch(w, h) }
     holdUntil = SystemClock.elapsedRealtime() + HOLD_MS
+    if (ok && confirm) {
+      val oldW = prevSize?.ovrW; val oldH = prevSize?.ovrH
+      Safety.ask("Screen size ${w}×$h") {
+        if (oldW != null && oldH != null) stretchNow(oldW, oldH) else unstretch()
+        Hub.prefs.edit().putInt("stretchW", prevW).putInt("stretchH", prevH).apply()
+      }
+    }
     return ok
   }
 
