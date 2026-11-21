@@ -16,7 +16,7 @@ function panelTheme(s: AppState) {
   const c = th.c;
   return {
     bg: argb(c.bg), sf: argb(c.sf, c.bg), sf2: argb(c.sf2, c.bg), bd: argb(c.bd2, c.bg), tx: argb(c.tx), mu: argb(c.mu, c.bg), ac: argb(c.ac), on: argb(c.on),
-    r: Math.min(th.r, 24), rs: Math.min(th.rs, 14), bw: th.bw > 0 ? Math.max(1, th.bw) : 0, mono: th.mono, upper: th.label !== 'sentence', glass: s.glass, dark: th.dark, style: s.floatStyle, opacity: s.floatOpacity, islandSize: s.floatSize, islandPos: s.floatPos, islandName: s.floatName, islandColor: argb(/^#[0-9a-fA-F]{6}$/.test(s.floatColor) ? s.floatColor : '#000000'), islandX: s.floatX, islandY: s.floatY, islandDx: s.floatDx, islandDy: s.floatDy, islandGlass: s.glass ? s.glassStyle : 'off', islandMove: s.floatMove,
+    r: Math.min(th.r, 24), rs: Math.min(th.rs, 14), bw: th.bw > 0 ? Math.max(1, th.bw) : 0, mono: th.mono, upper: th.label !== 'sentence', glass: s.glass, dark: th.dark, style: s.floatStyle, opacity: s.floatOpacity, islandSize: s.floatSize, islandPos: s.floatPos, islandName: s.floatName, islandColor: argb(/^#[0-9a-fA-F]{6}$/.test(s.floatColor) ? s.floatColor : '#000000'), islandX: s.floatX, islandY: s.floatY, islandDx: s.floatDx, islandDy: s.floatDy, islandLen: s.floatLen, islandBr: s.floatBr, islandGlass: s.glass ? s.glassStyle : 'off', islandMove: s.floatMove,
   };
 }
 
@@ -52,6 +52,7 @@ function load(): AppState {
     const o = JSON.parse(raw);
     if (o.themeId === 'glass') o.themeId = 'graphite'; // Glass was removed
     // Frosted and Fluid are glass styles now, not themes
+    if (typeof o.floatSize === 'number' && o.floatSize < 90) o.floatSize = 90;
     if (o.themeId === 'frosted') { o.themeId = 'paper'; o.glass = true; o.glassStyle = 'frosted'; }
     if (o.themeId === 'fluid') { o.themeId = 'graphite'; o.glass = true; o.glassStyle = 'fluid'; }
     // Older versions stored these as a density. The number the user typed (420, 490) is what they meant as the smallest width, so it is kept as is.

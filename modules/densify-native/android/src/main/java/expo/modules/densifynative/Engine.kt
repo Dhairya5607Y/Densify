@@ -71,6 +71,9 @@ data class PanelTheme(
   val islandMove: Boolean = false,
   /** Glass look of the OPENED island: off, liquid, frosted or fluid. The closed pill is always the plain island colour. */
   val islandGlass: String = "off",
+  /** Island length (long side) and breadth (short side) in dp. 0 means automatic from the size percentage and the camera. */
+  val islandLen: Int = 0,
+  val islandBr: Int = 0,
 )
 
 val HUD_FIELDS = listOf("fps", "cpu", "temp", "ram", "ping")
@@ -84,9 +87,9 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
     bg = c("bg", d.bg), sf = c("sf", d.sf), sf2 = c("sf2", d.sf2), bd = c("bd", d.bd), tx = c("tx", d.tx), mu = c("mu", d.mu), ac = c("ac", d.ac), on = c("on", d.on),
     r = o.optDouble("r", d.r.toDouble()).toFloat(), rs = o.optDouble("rs", d.rs.toDouble()).toFloat(), bw = o.optDouble("bw", d.bw.toDouble()).toFloat(),
     mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true), style = o.optString("style", "basic"), opacity = o.optInt("opacity", 90).coerceIn(20, 100),
-    islandSize = o.optInt("islandSize", 100).coerceIn(60, 160), islandPos = o.optString("islandPos", "top"), islandName = o.optBoolean("islandName", false),
+    islandSize = o.optInt("islandSize", 100).coerceIn(90, 160), islandPos = o.optString("islandPos", "top"), islandName = o.optBoolean("islandName", false),
     islandColor = c("islandColor", d.islandColor), islandX = o.optInt("islandX", 50).coerceIn(0, 100), islandY = o.optInt("islandY", 0).coerceIn(0, 100),
-    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false), islandGlass = o.optString("islandGlass", "off"),
+    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false), islandGlass = o.optString("islandGlass", "off"), islandLen = o.optInt("islandLen", 0).coerceIn(0, 400), islandBr = o.optInt("islandBr", 0).coerceIn(0, 200),
   )
 }
 

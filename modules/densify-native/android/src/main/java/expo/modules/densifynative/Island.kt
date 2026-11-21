@@ -278,7 +278,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     rawTheme = theme
     cardColor = theme.islandColor or I_BLACK
     palette()
-    sz = theme.islandSize / 100f
+    sz = (theme.islandSize / 100f).coerceAtLeast(0.9f)
     cs = min(sz, 1.25f)
     val m = realMetrics(ctx)
     lastW = m.widthPixels; lastH = m.heightPixels
@@ -368,11 +368,27 @@ class IslandPanel(private val ctx: Context) : PanelUi {
 
   private val glass: String get() = theme.islandGlass
 
+  private var sheenLayers: List<GradientDrawable> = emptyList()
+
   /** The glass layer of the open card. It fades in as the pill opens, so the closed island stays plain black. */
-  private fun glassDrawable(): GradientDrawable = when (glass) {
-    "frosted" -> GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x40FFFFFF, 0x22FFFFFF)).apply { setStroke(px(1f), 0x55FFFFFF) }
-    "fluid" -> GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x783B82F6, 0x668B5CF6, 0x6622D3EE)).apply { setStroke(px(1f), 0x44FFFFFF) }
-    else -> GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x4DFFFFFF, 0x0DFFFFFF, 0x2EFFFFFF)).apply { setStroke(px(1f), 0x66FFFFFF) }
+  private fun glassDrawable(): android.graphics.drawable.Drawable {
+    val layers = ArrayList<GradientDrawable>()
+    when (glass) {
+      // Frosted: a light milky tint over the blurred screen, with a clear 1dp edge (tint 0.2, border 0.2 white)
+      "frosted" -> layers.add(GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x40FFFFFF, 0x26FFFFFF)).apply { setStroke(px(1f), 0x38FFFFFF) })
+      // Fluid: blue to violet to teal colour flowing across the card, with a soft glow in one corner
+      "fluid" -> {
+        layers.add(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x803B82F6, 0x708B5CF6, 0x6622D3EE)).apply { setStroke(px(1f), 0x44FFFFFF) })
+        layers.add(GradientDrawable().apply { gradientType = GradientDrawable.RADIAL_GRADIENT; gradientRadius = px(150f).toFloat(); setGradientCenter(0.85f, 0.15f); colors = intArrayOf(0x55FFFFFF, 0x00FFFFFF) })
+      }
+      // Liquid: a bright specular sheen along the top left edge and a rim light all around
+      else -> {
+        layers.add(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x4DFFFFFF, 0x0DFFFFFF, 0x2EFFFFFF)).apply { setStroke(px(1f), 0x66FFFFFF) })
+        layers.add(GradientDrawable().apply { gradientType = GradientDrawable.RADIAL_GRADIENT; gradientRadius = px(120f).toFloat(); setGradientCenter(0.1f, 0.0f); colors = intArrayOf(0x44FFFFFF, 0x00FFFFFF) })
+      }
+    }
+    sheenLayers = layers
+    return android.graphics.drawable.LayerDrawable(layers.toTypedArray())
   }
 
   private fun buildContent(): LinearLayout {
@@ -541,12 +557,15 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val rc = if (custom) null else pickCutout(w, h)
     sideLeft = side && rc != null && rc.left <= 2 && rc.right < w - 2
 
-    // The pill wraps the camera like a real dynamic island
+    // The pill wraps the camera like a real dynamic island, but never grows past 1.35x its normal size: some phones report a very wide cut-out.
     var long = px(122f * sz); var short = px(34f * sz)
-    if (rc != null) {
-      if (side) { long = max(long, rc.height() + px(26f * sz)); short = max(short, rc.width() + px(12f * sz)) }
-      else { long = max(long, rc.width() + px(26f * sz)); short = max(short, rc.height() + px(10f * sz)) }
+    val autoLen = theme.islandLen <= 0; val autoBr = theme.islandBr <= 0
+    if (rc != null && !theme.islandMove) {
+      if (side) { if (autoLen) long = min(max(long, rc.height() + px(26f * sz)), (long * 1.35f).roundToInt()); if (autoBr) short = min(max(short, rc.width() + px(12f * sz)), (short * 1.35f).roundToInt()) }
+      else { if (autoLen) long = min(max(long, rc.width() + px(26f * sz)), (long * 1.35f).roundToInt()); if (autoBr) short = min(max(short, rc.height() + px(10f * sz)), (short * 1.35f).roundToInt()) }
     }
+    if (!autoLen) long = px(theme.islandLen.toFloat())
+    if (!autoBr) short = px(theme.islandBr.toFloat())
     cw = min(if (side) short else long, w)
     ch = min(if (side) long else short, h)
     val margin = px(10f)
@@ -612,11 +631,11 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     val cardR = px(30f * cs).toFloat()
     back?.cornerRadius = min(lerp(pillR, cardR, k), min(w, ht) / 2f)
     nameLabel?.alpha = (1f - k * 3f).coerceIn(0f, 1f)
-    sheen?.let { sv -> sv.alpha = k; (sv.background as? GradientDrawable)?.cornerRadius = back?.cornerRadius ?: 0f }
+    sheen?.let { sv -> sv.alpha = k; val cr = back?.cornerRadius ?: 0f; for (g in sheenLayers) g.cornerRadius = cr }
     if (glass == "frosted") {
       // A see-through card with the screen behind it blurred. Needs Android 12; older phones get the plain tinted card.
-      back?.setColor(((lerp(255f, 170f, k)).roundToInt() shl 24) or (cardColor and 0xFFFFFF))
-      if (Build.VERSION.SDK_INT >= 31) p.blurBehindRadius = (k * px(26f)).roundToInt()
+      back?.setColor(((lerp(255f, 185f, k)).roundToInt() shl 24) or (cardColor and 0xFFFFFF))
+      if (Build.VERSION.SDK_INT >= 31) p.blurBehindRadius = (k * px(18f)).roundToInt()
     }
     content?.alpha = ((k - 0.3f) / 0.7f).coerceIn(0f, 1f)
     val base = (theme.opacity / 100f).coerceIn(0.2f, 1f)
@@ -657,7 +676,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     a.addUpdateListener { progress = it.animatedValue as Float; render() }
     a.addListener(object : AnimatorListenerAdapter() {
       override fun onAnimationEnd(animation: Animator) {
-        if (anim === animation) { anim = null; if (!on) content?.visibility = View.GONE }
+        if (anim === animation) { anim = null; progress = to; if (!on) { content?.visibility = View.GONE; computeLayout() }; render() }
       }
     })
     anim = a

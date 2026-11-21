@@ -22,7 +22,7 @@ function PhoneMock() {
   const W = (land ? 860 : 400) * k;
   const H = (land ? 400 : 860) * k;
   const sz = state.floatSize / 100;
-  const long = 122 * sz, short = 34 * sz;
+  const long = state.floatLen > 0 ? state.floatLen : 122 * sz, short = state.floatBr > 0 ? state.floatBr : 34 * sz;
   const pw = (land ? short : long) * k;
   const ph = (land ? long : short) * k;
 
@@ -95,6 +95,26 @@ function Label({ children, right }: { children: React.ReactNode; right?: string 
   );
 }
 
+/** A number you can type or slide, with an Auto switch (0 = automatic). */
+function Dim({ label, value, min, max, auto, onChange }: { label: string; value: number; min: number; max: number; auto: string; onChange: (v: number) => void }) {
+  const t = useTheme();
+  const [txt, setTxt] = useState(String(value || ''));
+  React.useEffect(() => { setTxt(value > 0 ? String(value) : ''); }, [value]);
+  const commit = (v: string) => { const n = parseInt(v, 10); if (Number.isNaN(n)) { setTxt(value > 0 ? String(value) : ''); return; } onChange(clamp(n, min, max)); };
+  return (
+    <View style={{ marginTop: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flex: 1 }}><T w="600">{label}</T><T v="sub">{value > 0 ? `${value} dp` : auto}</T></View>
+        <TextInput value={txt} onChangeText={(v) => setTxt(v.replace(/[^0-9]/g, ''))} onEndEditing={() => commit(txt)} onSubmitEditing={() => commit(txt)}
+          keyboardType="number-pad" maxLength={3} placeholder="Auto" placeholderTextColor={t.c.mu}
+          style={{ width: 84, height: 40, borderRadius: t.rs, borderWidth: 1, borderColor: t.c.bd2, paddingHorizontal: 12, color: t.c.tx, fontSize: 15, textAlign: 'center' }} />
+        <Btn label="Auto" v="tonal" onPress={() => onChange(0)} />
+      </View>
+      <Slider value={value > 0 ? value : (min + max) / 2} min={min} max={max} onChange={(v) => onChange(Math.round(v))} />
+    </View>
+  );
+}
+
 /** Everything about the dynamic island in one block: position, size, colour, opacity and the optional name. */
 export function IslandSettings({ onPreview }: { onPreview: () => void }) {
   const { state, update } = useStore();
@@ -138,7 +158,12 @@ export function IslandSettings({ onPreview }: { onPreview: () => void }) {
       <View style={{ marginTop: 12 }}><PhoneMock /></View>
 
       <Label right={`${state.floatSize}%`}>Size</Label>
-      <Slider value={state.floatSize} min={70} max={150} onChange={(v) => set({ floatSize: Math.round(v / 5) * 5 })} />
+      <Slider value={state.floatSize} min={90} max={160} onChange={(v) => set({ floatSize: Math.round(v / 5) * 5 })} />
+
+      <Label>Exact length and breadth</Label>
+      <T v="sub">Type a number or slide it. Length is the long side of the closed island, breadth is the short side. Auto follows the size above.</T>
+      <Dim label="Length" value={state.floatLen} min={80} max={300} auto="Auto" onChange={(v) => set({ floatLen: v })} />
+      <Dim label="Breadth" value={state.floatBr} min={28} max={90} auto="Auto" onChange={(v) => set({ floatBr: v })} />
 
       <Label>Colour</Label>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8, alignItems: 'center' }}>

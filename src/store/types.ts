@@ -55,6 +55,9 @@ export type AppState = {
   floatDy: number;
   /** Movable: the island can be dragged in the game and remembers its spot. Off means fixed in place. */
   floatMove: boolean;
+  /** Island length and breadth in dp. 0 = automatic. */
+  floatLen: number;
+  floatBr: number;
   /** Set once the new island design has been applied to saved settings. */
   islandV2: boolean;
   /** Write DENSIFY (light blue) inside the island. Off by default. */
