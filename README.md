@@ -62,12 +62,7 @@ Everywhere in Densify the number is the **smallest width** in dp, the same numbe
 - Per-session averages: average FPS, 1% low, min and max, CPU, average and peak temperature, RAM, and ping with its low and high
 - Sampling only runs while something is showing it, so the monitor costs nothing the rest of the time
 
-**FPS works across phones and ROMs.** Phones differ (stock Android, One UI, ColorOS and OxygenOS, MIUI and HyperOS, Funtouch and more), so Densify tries four sources and uses the first that reports frames:
-
-1. SurfaceFlinger frame timing on the game's own layer (the most accurate)
-2. SurfaceFlinger `--timestats`, the compositor's own per-layer frame count (Android 10+), sampled over time
-3. HWUI frame stats from `gfxinfo`, for apps drawn by Android's UI renderer
-4. SurfaceFlinger's whole-screen frame counter, when a phone hides layer names
+**FPS comes from Android's Choreographer.** Choreographer calls back once for every screen refresh, and Densify counts those callbacks over about a second. It needs no Wireless Debugging link, Shizuku or root, so FPS works even when the other stats can't. On a phone whose panel follows the game (a 120 Hz screen dropping to 60 Hz for a 60 fps game) the number is the game's frame rate. On a panel that stays at a fixed rate it shows the screen's refresh rate instead.
 
 A number a phone refuses to give shows as a dash instead of a guess.
 
