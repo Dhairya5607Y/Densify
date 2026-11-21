@@ -378,7 +378,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
       "frosted" -> layers.add(GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x40FFFFFF, 0x26FFFFFF)).apply { setStroke(px(1f), 0x38FFFFFF) })
       // Fluid: blue to violet to teal colour flowing across the card, with a soft glow in one corner
       "fluid" -> {
-        layers.add(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x803B82F6, 0x708B5CF6, 0x6622D3EE)).apply { setStroke(px(1f), 0x44FFFFFF) })
+        layers.add(GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(0x803B82F6.toInt(), 0x708B5CF6, 0x6622D3EE)).apply { setStroke(px(1f), 0x44FFFFFF) })
         layers.add(GradientDrawable().apply { gradientType = GradientDrawable.RADIAL_GRADIENT; gradientRadius = px(150f).toFloat(); setGradientCenter(0.85f, 0.15f); colors = intArrayOf(0x55FFFFFF, 0x00FFFFFF) })
       }
       // Liquid: a bright specular sheen along the top left edge and a rim light all around
