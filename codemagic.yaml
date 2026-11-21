@@ -1,0 +1,49 @@
+# Codemagic CI for Densify (Expo SDK 57, Android APK).
+# Builds ONLY the `v2` branch: pushes to v2 trigger a build, every other branch is ignored.
+# Setup: in codemagic.io add this repo, choose "Use codemagic.yaml", and select the workflow below.
+# Optional: to sign with your own key, upload a keystore under Team settings > Code signing identities,
+# name its reference `densify_keystore`, and uncomment the `android_signing` lines.
+
+workflows:
+  densify-android-v2:
+    name: Densify Android (v2)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      node: 20
+      java: 17
+      vars:
+        PACKAGE_NAME: "com.densify.app"
+        EXPO_NO_TELEMETRY: "1"
+      # android_signing:
+      #   - densify_keystore
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: v2
+          include: true
+          source: true
+    scripts:
+      - name: Install dependencies
+        script: npm ci --no-audit --no-fund
+      - name: Type check
+        script: npx tsc --noEmit
+      - name: Generate the native Android project (Continuous Native Generation)
+        script: npx expo prebuild --platform android --clean --no-install
+      - name: Point Gradle at the Android SDK
+        script: echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+      - name: Build release APK
+        script: |
+          cd android
+          ./gradlew assembleRelease --no-daemon --stacktrace
+    artifacts:
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/**/mapping.txt
+    publishing:
+      email:
+        recipients:
+          - user@example.com
+        notify:
+          success: true
+          failure: true
