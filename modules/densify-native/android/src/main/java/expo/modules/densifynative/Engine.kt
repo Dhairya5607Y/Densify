@@ -73,6 +73,8 @@ data class PanelTheme(
   val islandGlass: String = "off",
   /** Island length (long side) and breadth (short side) in dp. 0 means automatic from the size percentage and the camera. */
   val islandLen: Int = 0,
+  /** Show the live FPS on the island while a game is open. */
+  val islandFps: Boolean = true,
   val islandBr: Int = 0,
 )
 
@@ -89,7 +91,7 @@ private fun themeFrom(o: JSONObject?): PanelTheme {
     mono = o.optBoolean("mono", false), upper = o.optBoolean("upper", false), glass = o.optBoolean("glass", false), dark = o.optBoolean("dark", true), style = o.optString("style", "basic"), opacity = o.optInt("opacity", 90).coerceIn(20, 100),
     islandSize = o.optInt("islandSize", 100).coerceIn(90, 160), islandPos = o.optString("islandPos", "top"), islandName = o.optBoolean("islandName", false),
     islandColor = c("islandColor", d.islandColor), islandX = o.optInt("islandX", 50).coerceIn(0, 100), islandY = o.optInt("islandY", 0).coerceIn(0, 100),
-    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false), islandGlass = o.optString("islandGlass", "off"), islandLen = o.optInt("islandLen", 0).coerceIn(0, 400), islandBr = o.optInt("islandBr", 0).coerceIn(0, 200),
+    islandDx = o.optInt("islandDx", 0).coerceIn(-200, 200), islandDy = o.optInt("islandDy", 0).coerceIn(-200, 200), islandMove = o.optBoolean("islandMove", false), islandGlass = o.optString("islandGlass", "off"), islandFps = o.optBoolean("islandFps", true), islandLen = o.optInt("islandLen", 0).coerceIn(0, 400), islandBr = o.optInt("islandBr", 0).coerceIn(0, 200),
   )
 }
 

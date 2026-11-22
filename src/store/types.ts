@@ -56,6 +56,7 @@ export type AppState = {
   /** Movable: the island can be dragged in the game and remembers its spot. Off means fixed in place. */
   floatMove: boolean;
   /** Island length and breadth in dp. 0 = automatic. */
+  floatFps: boolean;
   floatLen: number;
   floatBr: number;
   /** Set once the new island design has been applied to saved settings. */

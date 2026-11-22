@@ -36,6 +36,7 @@ export const DEFAULT_STATE: AppState = {
   floatDx: 0,
   floatDy: 0,
   floatMove: false,
+  floatFps: true,
   floatLen: 0,
   floatBr: 0,
   islandV2: true,

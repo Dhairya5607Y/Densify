@@ -141,8 +141,8 @@ object Perf {
             fpsOnly(front)
             wait = 1_000L
           } else {
-            ChoreoFps.stop()
-            if (front == null) noteFrontGone()
+            // Nothing is asking for numbers, but while a game is open FPS keeps being counted so the island can show it at any moment.
+            if (front != null) ChoreoFps.start() else { ChoreoFps.stop(); noteFrontGone() }
           }
         } catch (t: kotlinx.coroutines.CancellationException) { throw t
         } catch (t: Throwable) { Hub.log("Monitor hiccup: ${t.message}") }
@@ -492,7 +492,7 @@ object ChoreoFps {
       val now = SystemClock.elapsedRealtime()
       if (since == 0L) since = now
       val el = now - since
-      if (el >= 1000L) {
+      if (el >= 500L) {
         fps = (count * 1000f / el).roundToInt()
         stamp = now
         count = 0
@@ -520,5 +520,5 @@ object ChoreoFps {
   }
 
   /** The latest reading, or -1 when it is not running or is stale (the screen was off or the app was frozen). */
-  fun read(): Int = if (SystemClock.elapsedRealtime() - stamp < 3_000L) fps else -1
+  fun read(): Int = if (SystemClock.elapsedRealtime() - stamp < 2_000L) fps else -1
 }

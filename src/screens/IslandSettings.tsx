@@ -199,6 +199,14 @@ export function IslandSettings({ onPreview }: { onPreview: () => void }) {
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 18 }}>
         <View style={{ flex: 1 }}>
+          <T w="600">Show FPS</T>
+          <T v="sub">Live frame rate inside the island while a game is open, counted all the time.</T>
+        </View>
+        <AppSwitch on={state.floatFps} onChange={(v) => set({ floatFps: v })} />
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 18 }}>
+        <View style={{ flex: 1 }}>
           <T w="600">Write DENSIFY</T>
           <T v="sub">Show the name in light blue inside the island. Off keeps it pure black.</T>
         </View>
