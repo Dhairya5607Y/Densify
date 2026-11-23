@@ -24,6 +24,7 @@ class MonitorService : Service() {
   private var linkJob: Job? = null
   private var floating: FloatingPanel? = null
   private var island: IslandPanel? = null
+  private var fpsChip: FpsChip? = null
   private var hud: PerfHud? = null
   private var netCb: ConnectivityManager.NetworkCallback? = null
   override fun onBind(intent: Intent?): IBinder? = null
@@ -87,6 +88,7 @@ class MonitorService : Service() {
     val basic = floating ?: FloatingPanel(this).also { floating = it }
     val isl = island ?: IslandPanel(this).also { island = it }
     val overlay = hud ?: PerfHud(this).also { hud = it }
+    val chip = fpsChip ?: FpsChip(this).also { fpsChip = it }
     floatJob?.cancel()
     floatJob = Hub.scope.launch {
       while (isActive) {
@@ -109,6 +111,8 @@ class MonitorService : Service() {
           // The live stats readout is separate from the panel, so it can stay on while the panel is closed.
           val hudWanted = c.hud == "always" || (c.hud == "gaming" && game != null)
           if (hudWanted && canDraw) { Perf.acquire("hud"); overlay.show(c.hudPos, c.hudFields) } else { Perf.release("hud"); overlay.hide() }
+          // The floating FPS chip belongs to the island look and stays up the whole time a game is open.
+          chip.update(canDraw && c.theme.style == "island" && c.theme.islandFps && game != null, c.theme)
           syncRecNotif()
           panel.refreshTheme(c.theme)
           // If the engine loop ever died, bring it back.
@@ -157,7 +161,7 @@ class MonitorService : Service() {
     watcher?.cancel()
     floatJob?.cancel()
     linkJob?.cancel()
-    floating?.hide(); island?.hide()
+    floating?.hide(); island?.hide(); fpsChip?.hide()
     hud?.hide()
     runCatching { getSystemService(NotificationManager::class.java).cancel(Notifs.ID_REC_IDLE) }
     idleShown = false
@@ -170,7 +174,7 @@ class MonitorService : Service() {
     watcher?.cancel()
     floatJob?.cancel()
     linkJob?.cancel()
-    floating?.hide(); island?.hide()
+    floating?.hide(); island?.hide(); fpsChip?.hide()
     hud?.hide()
     netCb?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
     netCb = null

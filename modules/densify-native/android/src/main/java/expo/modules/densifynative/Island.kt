@@ -762,7 +762,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     if (wasOpen) setExpanded(true, animate = false)
   }
 
-  private fun idleText(): CharSequence = if (builtRec) recText() else fpsNow()?.let { "$it FPS" } ?: if (theme.islandName) "DENSIFY" else ""
+  private fun idleText(): CharSequence = if (builtRec) recText() else if (theme.islandName) "DENSIFY" else ""
 
   /** The live frame rate while a game is open, or null (feature off, no game in front, or no reading yet). */
   private fun fpsNow(): Int? {
@@ -770,17 +770,11 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     return ChoreoFps.read().takeIf { it > 0 }
   }
 
-  /** Keeps the frame rate fresh in the closed pill and in the open card. Starts the counter too, so it runs the whole time a game is open. */
+  /** Keeps the frame rate in the open card fresh (the closed pill stays plain). Starts the counter too, so it runs the whole time a game is open. */
   private fun syncFps() {
     if (theme.islandFps && Hub.engine.state.value.frontPkg != null) ChoreoFps.start()
     val f = fpsNow()
     fpsLabel?.let { l -> val t = if (f != null) "$f FPS" else ""; if (l.text.toString() != t) l.text = t }
-    if (!expanded && !bannerOn && !builtRec) {
-      nameLabel?.let { nl ->
-        val t = idleText()
-        if (nl.text.toString() != t.toString()) { nl.text = t; nl.letterSpacing = if (f != null) 0.06f else 0.22f }
-      }
-    }
   }
 
   /** A red dot and the recording time, shown inside the closed pill while the screen recorder runs. */
@@ -877,7 +871,7 @@ class IslandPanel(private val ctx: Context) : PanelUi {
     nameLabel?.let {
       it.text = idleText()
       it.setTextColor(if (builtRec) fg else accent)
-      it.letterSpacing = if (builtRec || fpsNow() != null) 0.04f else 0.22f
+      it.letterSpacing = if (builtRec) 0.02f else 0.22f
     }
   }
 

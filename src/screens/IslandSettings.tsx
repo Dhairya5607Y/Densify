@@ -200,7 +200,7 @@ export function IslandSettings({ onPreview }: { onPreview: () => void }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 18 }}>
         <View style={{ flex: 1 }}>
           <T w="600">Show FPS</T>
-          <T v="sub">Live frame rate inside the island while a game is open, counted all the time.</T>
+          <T v="sub">A small floating FPS chip in the island's style while a game is open (drag it anywhere), and the live number inside the open island.</T>
         </View>
         <AppSwitch on={state.floatFps} onChange={(v) => set({ floatFps: v })} />
       </View>
