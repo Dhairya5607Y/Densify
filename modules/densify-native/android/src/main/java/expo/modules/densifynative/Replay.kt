@@ -297,6 +297,7 @@ class ReplayConsentActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     Hub.init(this)
+    Hub.overGame()
     if (ReplayState.state != "idle" || RecState.state != "idle") {
       Toast.makeText(this, if (RecState.state != "idle") "Stop the recording first" else "Instant replay is already on", Toast.LENGTH_SHORT).show()
       finish(); return

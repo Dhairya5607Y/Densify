@@ -268,6 +268,9 @@ class Engine(private val app: Context) {
   private suspend fun tick() {
     val c = config()
     val fg = Hub.detector.poll()
+    // The system's own windows (notification shade, permission and screen-capture prompts) and a Densify screen opened over the game on
+    // purpose are not "another app": the game is still the game, so nothing changes and nothing is restored.
+    if (active != null && (fg == "com.android.systemui" || (fg == app.packageName && SystemClock.elapsedRealtime() < Hub.neutralUntil))) { leftAt = 0; return }
     // Densify itself is never a game, so opening the app can never change the width.
     val front = if (fg != app.packageName) c.profiles.firstOrNull { it.pkg == fg } else null
     if (_state.value.frontPkg != front?.pkg) _state.update { it.copy(frontPkg = front?.pkg) }

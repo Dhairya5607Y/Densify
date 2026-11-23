@@ -85,6 +85,9 @@ object Hub {
 
   /** Elapsed-realtime deadline until which the floating panel is forced visible (used by the in-app preview). */
   @Volatile var floatForceUntil = 0L
+  /** While a Densify screen opens over a game on purpose (a permission prompt, the tap mapper), Densify being in front must not count as leaving the game. */
+  @Volatile var neutralUntil = 0L
+  fun overGame(ms: Long = 90_000L) { neutralUntil = android.os.SystemClock.elapsedRealtime() + ms }
 
   val prefs get() = app.getSharedPreferences("densify", Context.MODE_PRIVATE)
 

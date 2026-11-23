@@ -415,6 +415,7 @@ class RecordConsentActivity : Activity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     Hub.init(this)
+    Hub.overGame()
     if (RecState.state != "idle") { finish(); return }
     try {
       val mpm = getSystemService(MediaProjectionManager::class.java)
